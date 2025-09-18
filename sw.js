@@ -1,18 +1,28 @@
-const CACHE_NAME = 'overtime-pwa-cache-v6.0.0'; // Final stable architecture
+const CACHE_NAME = 'overtime-pwa-cache-v7.0.0'; // Resilient Offline Edition
 const urlsToCache = [
   './',
   './index.html',
   './style.css',
   './app.js',
-  './manifest.json'
+  './manifest.json',
+  // Add external dependencies for true offline capability
+  'https://unpkg.com/jalali-moment/dist/jalali-moment.browser.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
+  'https://cdn.tailwindcss.com',
+  'https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;700&display=swap',
+  'https://www.iranalumina.ir/Files/HeaderLogo.png'
 ];
 
 self.addEventListener('install', event => {
   self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => {
-      console.log('Opened cache and caching core assets');
-      return cache.addAll(urlsToCache);
+      console.log('Opened cache and caching all assets');
+      // Use addAll which is atomic, if one fails, all fail.
+      return cache.addAll(urlsToCache).catch(error => {
+          console.error('Failed to cache one or more resources:', error);
+          // This prevents the service worker from installing if it can't cache a crucial resource.
+      });
     })
   );
 });
@@ -35,31 +45,29 @@ self.addEventListener('activate', event => {
 });
 
 self.addEventListener('fetch', event => {
-    // Only handle GET requests that are local to the origin.
-    if (event.request.method !== 'GET' || !event.request.url.startsWith(self.location.origin)) {
+    // Network-first strategy for all GET requests.
+    // This ensures users get the latest content, with a fallback to cache.
+    if (event.request.method !== 'GET') {
         return;
     }
 
-    // Cache-first strategy for our own assets.
     event.respondWith(
-        caches.match(event.request).then(cachedResponse => {
-            if (cachedResponse) {
-                return cachedResponse;
-            }
-            
-            // If not in cache, fetch from network, then cache it.
-            return fetch(event.request).then(networkResponse => {
-                // Check if we received a valid response
-                if (!networkResponse || networkResponse.status !== 200 || networkResponse.type !== 'basic') {
-                    return networkResponse;
+        fetch(event.request)
+            .then(networkResponse => {
+                // If the fetch is successful, clone it and cache it.
+                if (networkResponse.ok) {
+                    const responseToCache = networkResponse.clone();
+                    caches.open(CACHE_NAME).then(cache => {
+                        cache.put(event.request, responseToCache);
+                    });
                 }
-
-                const responseToCache = networkResponse.clone();
-                caches.open(CACHE_NAME).then(cache => {
-                    cache.put(event.request, responseToCache);
-                });
                 return networkResponse;
-            });
-        })
+            })
+            .catch(() => {
+                // If the network fails, try to serve from the cache.
+                return caches.match(event.request).then(cachedResponse => {
+                    return cachedResponse || Response.error(); // Or a custom offline page
+                });
+            })
     );
 });
