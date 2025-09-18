@@ -13,6 +13,10 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;700&display=swap" rel="stylesheet">
     
+    <!-- Persian Datepicker Files -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/persian-datepicker@1.2.0/dist/css/persian-datepicker.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/persian-datepicker@1.2.0/dist/js/persian-datepicker.min.js"></script>
+    
     <script src="https://unpkg.com/jalali-moment/dist/jalali-moment.browser.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
@@ -29,22 +33,13 @@
         .modal-backdrop { transition: opacity 0.3s ease; }
         .non-routine-record td { color: #dc2626; font-weight: 700; }
         #settings-modal:not(.hidden) { backdrop-filter: blur(4px); }
-        /* Style for native date picker */
-        input[type="date"] {
-            position: relative;
-        }
-        input[type="date"]::-webkit-calendar-picker-indicator {
-            position: absolute;
-            right: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            padding: 0;
-            margin: 0;
-            background: transparent;
-            color: transparent;
-            cursor: pointer;
-        }
+        /* Datepicker custom styles & BUG FIX */
+        .pdp-container { z-index: 1000 !important; } /* CRITICAL FIX for visibility */
+        .pdp-group .pdp-header { background-color: #3b82f6 !important; }
+        .pdp-group .pdp-header .pdp-month-name, .pdp-group .pdp-header .pdp-year-name { color: white !important; }
+        .pdp-group .pdp-header .pdp-nav-btn.pdp-prev-btn, .pdp-group .pdp-header .pdp-nav-btn.pdp-next-btn { fill: white !important; }
+        .pdp-group .pdp-toolbox .pdp-btn-today { background-color: #1e40af !important; color: white !important; }
+        .pdp-day.pdp-selected { background-color: #2563eb !important; }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800">
@@ -69,8 +64,7 @@
                 <form id="overtime-form" class="grid grid-cols-1 md:grid-cols-2 gap-6">
                      <div>
                         <label for="date-input" class="block mb-2 font-medium text-gray-700">تاریخ</label>
-                        <input type="date" id="date-input" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition cursor-pointer bg-white text-center">
-                        <p id="jalali-date-display" class="text-sm text-gray-500 mt-1 text-center font-semibold"></p>
+                        <input type="text" id="date-input" placeholder="برای انتخاب تاریخ کلیک کنید" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition cursor-pointer bg-white">
                     </div>
 
                     <div>
@@ -153,7 +147,7 @@
         
         <footer class="text-center mt-12 text-gray-500 text-sm">
             <p>طراحی و توسعه جواد ابراهیمی توسط هوش مصنوعی Gemini</p>
-            <p class="mt-1">نسخه 3.0.0 (پایداری کامل)</p>
+            <p class="mt-1">نسخه 3.1.0 (تقویم شمسی)</p>
         </footer>
     </div>
 
@@ -170,8 +164,7 @@
                 </div>
                  <div>
                     <label for="cycle-start-date" class="block mb-2 font-medium text-gray-700">تاریخ شروع اولین روز چرخه:</label>
-                    <input type="date" id="cycle-start-date" class="w-full p-3 border border-gray-300 rounded-lg cursor-pointer bg-white text-center">
-                    <p id="jalali-cycle-date-display" class="text-sm text-gray-500 mt-1 text-center font-semibold"></p>
+                    <input type="text" id="cycle-start-date" placeholder="برای انتخاب کلیک کنید" class="w-full p-3 border border-gray-300 rounded-lg cursor-pointer bg-white">
                     <p class="text-xs text-gray-500 mt-1">مثال: اگر الگوی شما ۳عصر-۳صبح-۳شب است، تاریخ اولین روز عصرکاری را وارد کنید.</p>
                 </div>
             </div>
@@ -265,6 +258,13 @@ document.addEventListener('DOMContentLoaded', () => {
             'holiday': 'روز تعطیل',
             'change_shift': 'چنج شیفت',
         },
+        datepickerOptions: {
+            format: 'YYYY/MM/DD',
+            autoClose: true,
+            observer: true, 
+            navigator: { enabled: true, text: { btnNextText: '>', btnPrevText: '<' } },
+            toolbox: { enabled: true, text: { btnToday: 'امروز' } }
+        }
     };
     const shiftTypeMapReverse = Object.fromEntries(Object.entries(config.shiftTypes).map(([k, v]) => [v, k]));
 
@@ -274,7 +274,6 @@ document.addEventListener('DOMContentLoaded', () => {
         mainContent: document.getElementById('main-content'),
         form: document.getElementById('overtime-form'),
         dateInput: document.getElementById('date-input'),
-        jalaliDateDisplay: document.getElementById('jalali-date-display'),
         startTimeSelect: document.getElementById('start-time'),
         endTimeSelect: document.getElementById('end-time'),
         descriptionInput: document.getElementById('description'),
@@ -298,32 +297,25 @@ document.addEventListener('DOMContentLoaded', () => {
         settingsModal: document.getElementById('settings-modal'),
         shiftPatternSelect: document.getElementById('shift-pattern'),
         cycleStartDateInput: document.getElementById('cycle-start-date'),
-        jalaliCycleDateDisplay: document.getElementById('jalali-cycle-date-display'),
         settingsSaveBtn: document.getElementById('settings-save-btn'),
         settingsError: document.getElementById('settings-error'),
     };
 
     // --- State Management ---
     let state = {
-        overtimeData: JSON.parse(localStorage.getItem('overtimeData_v3.0.0')) || [],
-        userSettings: JSON.parse(localStorage.getItem('userSettings_v3.0.0')) || null,
+        overtimeData: JSON.parse(localStorage.getItem('overtimeData_v3.1.0')) || [],
+        userSettings: JSON.parse(localStorage.getItem('userSettings_v3.1.0')) || null,
         confirmCallback: null,
         autoCalculatedShift: null,
-    };
-
-    // --- Date Conversion Helpers ---
-    const gregorianToJalali = (gregorianStr) => {
-        if (!gregorianStr) return '';
-        return moment(gregorianStr, 'YYYY-MM-DD').locale('fa').format('jYYYY/jMM/jDD');
-    };
-    const jalaliToGregorian = (jalaliStr) => {
-        if (!jalaliStr) return '';
-        return moment(jalaliStr, 'jYYYY/jMM/jDD').locale('en').format('YYYY-MM-DD');
+        datepickers: {
+            main: null,
+            settings: null
+        }
     };
 
     // --- Core Functions ---
-    const saveData = () => localStorage.setItem('overtimeData_v3.0.0', JSON.stringify(state.overtimeData));
-    const saveSettings = () => localStorage.setItem('userSettings_v3.0.0', JSON.stringify(state.userSettings));
+    const saveData = () => localStorage.setItem('overtimeData_v3.1.0', JSON.stringify(state.overtimeData));
+    const saveSettings = () => localStorage.setItem('userSettings_v3.1.0', JSON.stringify(state.userSettings));
     const calculateDuration = (start, end) => {
        start = parseInt(start); end = parseInt(end);
        return end > start ? end - start : 24 - start + end;
@@ -353,8 +345,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const pattern = config.shiftPatterns[state.userSettings.pattern];
         if (!pattern) return null;
 
-        const targetDate = moment(jalaliDateStr, 'jYYYY/jMM/jDD');
-        const startDate = moment(state.userSettings.startDate, 'jYYYY/jMM/jDD');
+        const targetDate = moment(jalaliDateStr, 'jYYYY/jMM/DD');
+        const startDate = moment(state.userSettings.startDate, 'jYYYY/jMM/DD');
         
         if (!targetDate.isValid() || !startDate.isValid()) return null;
 
@@ -365,8 +357,9 @@ document.addEventListener('DOMContentLoaded', () => {
         return pattern.getShift(dayDifference, persianDayOfWeek);
     };
     
-    const updateAutoShiftDisplay = (jalaliDate) => {
-        const calculatedShift = calculateShiftForDate(jalaliDate);
+    const updateAutoShiftDisplay = () => {
+        const date = elements.dateInput.value;
+        const calculatedShift = calculateShiftForDate(date);
         state.autoCalculatedShift = calculatedShift;
 
         if (calculatedShift) {
@@ -435,50 +428,48 @@ document.addEventListener('DOMContentLoaded', () => {
             elements.shiftPatternSelect.add(new Option(value.name, key));
         }
     };
-    
-    const setDateAndDisplay = (inputElement, displayElement, gregorianDate) => {
-        inputElement.value = gregorianDate;
-        const jalaliDate = gregorianToJalali(gregorianDate);
-        displayElement.textContent = jalaliDate;
-        return jalaliDate;
+
+    // --- View Initializers ---
+    const initializeMainApp = () => {
+        elements.mainContent.classList.remove('hidden');
+        if (!state.datepickers.main) {
+            state.datepickers.main = new persianDatepicker(elements.dateInput, config.datepickerOptions);
+            elements.dateInput.setAttribute('readonly', 'readonly'); // Prevent keyboard
+        }
+        elements.dateInput.value = moment().locale('fa').format('YYYY/MM/DD');
+        updateAutoShiftDisplay();
+    };
+
+    const openSettingsModal = () => {
+        if (!state.datepickers.settings) {
+            state.datepickers.settings = new persianDatepicker(elements.cycleStartDateInput, config.datepickerOptions);
+            elements.cycleStartDateInput.setAttribute('readonly', 'readonly');
+        }
+
+        if (state.userSettings) {
+            elements.shiftPatternSelect.value = state.userSettings.pattern;
+            elements.cycleStartDateInput.value = state.userSettings.startDate;
+        } else {
+            elements.cycleStartDateInput.value = moment().locale('fa').format('YYYY/MM/DD');
+        }
+
+        showModal(elements.settingsModal);
     };
 
     // --- Settings Modal Logic ---
     const handleSaveSettings = () => {
         const pattern = elements.shiftPatternSelect.value;
-        const startDateGregorian = elements.cycleStartDateInput.value;
+        const startDate = elements.cycleStartDateInput.value.trim();
 
-        if (!startDateGregorian) {
+        if (!moment(startDate, 'jYYYY/MM/DD', true).isValid()) {
             showError('لطفاً تاریخ شروع چرخه را انتخاب کنید.', elements.settingsError);
             return;
         }
-        
-        state.userSettings = { 
-            pattern, 
-            startDate: gregorianToJalali(startDateGregorian)
-        };
+
+        state.userSettings = { pattern, startDate };
         saveSettings();
         hideModal(elements.settingsModal);
         initializeMainApp();
-    };
-    
-    const openSettingsModal = () => {
-        if (state.userSettings) {
-            elements.shiftPatternSelect.value = state.userSettings.pattern;
-            const gregorianStartDate = jalaliToGregorian(state.userSettings.startDate);
-            setDateAndDisplay(elements.cycleStartDateInput, elements.jalaliCycleDateDisplay, gregorianStartDate);
-        } else {
-            const todayGregorian = moment().locale('en').format('YYYY-MM-DD');
-            setDateAndDisplay(elements.cycleStartDateInput, elements.jalaliCycleDateDisplay, todayGregorian);
-        }
-        showModal(elements.settingsModal);
-    };
-    
-    const initializeMainApp = () => {
-        elements.mainContent.classList.remove('hidden');
-        const todayGregorian = moment().locale('en').format('YYYY-MM-DD');
-        const jalaliDate = setDateAndDisplay(elements.dateInput, elements.jalaliDateDisplay, todayGregorian);
-        updateAutoShiftDisplay(jalaliDate);
     };
 
     // --- Event Handlers ---
@@ -486,19 +477,12 @@ document.addEventListener('DOMContentLoaded', () => {
         elements.settingsBtn.addEventListener('click', openSettingsModal);
         elements.settingsSaveBtn.addEventListener('click', handleSaveSettings);
 
-        elements.dateInput.addEventListener('change', (e) => {
-            const jalaliDate = setDateAndDisplay(elements.dateInput, elements.jalaliDateDisplay, e.target.value);
-            updateAutoShiftDisplay(jalaliDate);
-        });
-        
-        elements.cycleStartDateInput.addEventListener('change', (e) => {
-            setDateAndDisplay(elements.cycleStartDateInput, elements.jalaliCycleDateDisplay, e.target.value);
-        });
+        elements.dateInput.addEventListener('change', updateAutoShiftDisplay);
 
         elements.form.addEventListener('submit', (e) => {
             e.preventDefault();
-            const jalaliDate = gregorianToJalali(elements.dateInput.value);
-            if (!jalaliDate) return showError('لطفاً یک تاریخ انتخاب کنید.');
+            const date = elements.dateInput.value.trim();
+            if (!date) return showError('لطفاً یک تاریخ انتخاب کنید.');
             
             const startTime = parseInt(elements.startTimeSelect.value);
             const description = elements.descriptionInput.value.trim();
@@ -513,7 +497,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const record = {
-                date: jalaliDate,
+                date,
                 startTime: elements.startTimeSelect.value,
                 endTime: elements.endTimeSelect.value,
                 description: finalDescription,
@@ -522,7 +506,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 isNonRoutine,
             };
 
-            const existingIndex = state.overtimeData.findIndex(r => r.date === jalaliDate);
+            const existingIndex = state.overtimeData.findIndex(r => r.date === date);
             if (existingIndex > -1) {
                 state.overtimeData[existingIndex] = record;
             } else {
@@ -531,9 +515,8 @@ document.addEventListener('DOMContentLoaded', () => {
             saveData();
             renderRecords();
             elements.form.reset();
-            const todayGregorian = moment().locale('en').format('YYYY-MM-DD');
-            const todayJalali = setDateAndDisplay(elements.dateInput, elements.jalaliDateDisplay, todayGregorian);
-            updateAutoShiftDisplay(todayJalali);
+            elements.dateInput.value = moment().locale('fa').format('YYYY/MM/DD');
+            updateAutoShiftDisplay();
         });
 
         elements.deleteAllBtn.addEventListener('click', () => {
@@ -632,7 +615,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     saveData();
                     renderRecords();
                 } else {
-                    showError("هیچ رکورد معتبری در فایل اکسل یافت نشد. مطمئن شوید فرمت تاریخ jYYYY/jMM/jDD است.");
+                    showError("هیچ رکورد معتبری در فایل اکسل یافت نشد. مطمئن شوید فرمت تاریخ jYYYY/jMM/DD است.");
                 }
 
             } catch (err) {
@@ -668,3 +651,5 @@ document.addEventListener('DOMContentLoaded', () => {
 </script>
 </body>
 </html>
+
+
