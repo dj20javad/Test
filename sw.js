@@ -1,4 +1,4 @@
-const CACHE_NAME = 'overtime-pwa-cache-v3.2.0'; // Final stable version
+const CACHE_NAME = 'overtime-pwa-cache-v4.0.0'; // Final stable version
 const urlsToCache = [
   './',
   './index.html',
@@ -53,3 +53,5 @@ self.addEventListener('fetch', event => {
             })
     );
 });
+
+
