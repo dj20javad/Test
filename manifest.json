@@ -1,0 +1,22 @@
+{
+  "name": "سامانه هوشمند ثبت اضافه کاری",
+  "short_name": "اضافه کاری هوشمند",
+  "description": "یک اپلیکیشن پیش‌رونده برای ثبت و مدیریت هوشمند ساعات اضافه کاری بر اساس الگوهای شیفتی.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#f3f4f6",
+  "theme_color": "#4a90e2",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "https://placehold.co/192x192/4a90e2/ffffff?text=App",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "https://placehold.co/512x512/4a90e2/ffffff?text=App",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ]
+}
