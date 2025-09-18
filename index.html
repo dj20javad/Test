@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>سامانه هوشمند ثبت اضافه کاری</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#4a90e2">
+    <link rel="apple-touch-icon" href="https://placehold.co/192x192/4a90e2/ffffff?text=App">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;700&display=swap" rel="stylesheet">
+    
+    <script src="https://unpkg.com/jalali-moment/dist/jalali-moment.browser.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        body { font-family: 'Vazirmatn', sans-serif; background-color: #f3f4f6; }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #888; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #555; }
+        .form-select {
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+            background-position: left 0.5rem center; background-repeat: no-repeat; background-size: 1.5em 1.5em;
+            padding-left: 2.5rem; -webkit-appearance: none; -moz-appearance: none; appearance: none;
+        }
+        .modal-backdrop { transition: opacity 0.3s ease; }
+        .non-routine-record td { color: #dc2626; font-weight: 700; }
+        #settings-modal:not(.hidden) { backdrop-filter: blur(4px); }
+        /* Style for native date picker */
+        input[type="date"] {
+            position: relative;
+        }
+        input[type="date"]::-webkit-calendar-picker-indicator {
+            position: absolute;
+            right: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            padding: 0;
+            margin: 0;
+            background: transparent;
+            color: transparent;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <div id="app-container" class="container mx-auto p-4 md:p-8 max-w-4xl">
+        <header class="text-center mb-8 flex flex-col items-center">
+            <img src="https://www.iranalumina.ir/Files/HeaderLogo.png" alt="لوگوی شرکت آلومینای ایران" class="h-[42px] w-[42px] mb-4 object-contain" onerror="this.src='https://placehold.co/42x42/cccccc/ffffff?text=IAC'">
+            <h1 class="text-2xl font-bold text-gray-800">شرکت آلومینای ایران</h1>
+            <p class="text-lg text-gray-600">جاجرم</p>
+            <hr class="w-48 my-4 border-gray-300">
+            <div class="flex justify-center items-center gap-4">
+                <h2 class="text-xl font-bold text-gray-700">سامانه ثبت اضافه کاری</h2>
+                <button id="settings-btn" class="text-gray-500 hover:text-blue-600 transition" title="تنظیمات شیفت">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06-.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                </button>
+            </div>
+        </header>
+
+        <main id="main-content" class="hidden">
+            <!-- Form Section -->
+            <div class="bg-white p-6 rounded-lg shadow-md mb-8">
+                <form id="overtime-form" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                     <div>
+                        <label for="date-input" class="block mb-2 font-medium text-gray-700">تاریخ</label>
+                        <input type="date" id="date-input" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition cursor-pointer bg-white text-center">
+                        <p id="jalali-date-display" class="text-sm text-gray-500 mt-1 text-center font-semibold"></p>
+                    </div>
+
+                    <div>
+                        <label for="shift-type" class="block mb-2 font-medium text-gray-700">نوع شیفت / روز</label>
+                        <select id="shift-type" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition form-select"></select>
+                         <p id="auto-shift-display" class="text-xs text-gray-500 mt-1 h-4"></p>
+                    </div>
+                    
+                     <div>
+                        <label for="start-time" class="block mb-2 font-medium text-gray-700">ساعت شروع اضافه کاری</label>
+                        <select id="start-time" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition form-select"></select>
+                    </div>
+
+                    <div>
+                        <label for="end-time" class="block mb-2 font-medium text-gray-700">ساعت پایان اضافه کاری</label>
+                        <select id="end-time" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition form-select"></select>
+                    </div>
+
+                    <div class="md:col-span-2">
+                        <label for="successor-input" class="block mb-2 font-medium text-gray-700">جانشین (اختیاری)</label>
+                        <input type="text" id="successor-input" placeholder="نام جانشین (مثال: جواد ابراهیمی)" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
+                    </div>
+
+                    <div class="md:col-span-2">
+                        <label for="description" class="block mb-2 font-medium text-gray-700">توضیحات (اختیاری)</label>
+                        <textarea id="description" rows="3" placeholder="توضیحات مربوط به اضافه کاری..." class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"></textarea>
+                    </div>
+
+                    <div class="md:col-span-2 text-left">
+                        <button type="submit" class="bg-blue-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition w-full md:w-auto">
+                            ثبت / ویرایش اضافه کاری
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Summary and Records Section -->
+            <div class="bg-white p-6 rounded-lg shadow-md">
+                <div class="flex flex-col md:flex-row justify-between items-center mb-6 pb-4 border-b">
+                    <h2 class="text-xl font-bold text-gray-700 mb-4 md:mb-0">سوابق ثبت شده</h2>
+                    <div id="total-hours-display" class="text-lg font-bold bg-blue-100 text-blue-800 px-4 py-2 rounded-lg">
+                        مجموع اضافه کاری: 0 ساعت
+                    </div>
+                </div>
+
+                <p class="text-center text-sm font-bold text-red-600 mb-4">
+                    !توجه: لطفاً برای جلوگیری از حذف ناخواسته اطلاعات، به صورت هفتگی خروجی اکسل بگیرید
+                </p>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    <button id="export-btn" class="bg-green-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-green-700 transition">خروجی اکسل</button>
+                    <button id="import-btn" class="bg-purple-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-purple-700 transition">ورود از اکسل</button>
+                    <button id="delete-all-btn" class="bg-red-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-red-700 transition">حذف تمام سوابق</button>
+                    <input type="file" id="import-file" class="hidden" accept=".xlsx, .xls, .csv">
+                </div>
+                
+                <div id="alert-message" class="hidden p-4 mb-4 text-sm text-yellow-800 rounded-lg bg-yellow-100" role="alert"></div>
+                <div id="error-message" class="hidden p-4 mb-4 text-sm text-red-800 rounded-lg bg-red-100" role="alert"></div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-center">
+                        <thead class="bg-gray-50 border-b-2 border-gray-200">
+                            <tr>
+                                <th class="p-3 text-sm font-semibold tracking-wide">تاریخ</th>
+                                <th class="p-3 text-sm font-semibold tracking-wide">نوع شیفت</th>
+                                <th class="p-3 text-sm font-semibold tracking-wide">جانشین</th>
+                                <th class="p-3 text-sm font-semibold tracking-wide">شروع</th>
+                                <th class="p-3 text-sm font-semibold tracking-wide">پایان</th>
+                                <th class="p-3 text-sm font-semibold tracking-wide">مدت</th>
+                                <th class="p-3 text-sm font-semibold tracking-wide hidden md:table-cell">توضیحات</th>
+                                <th class="p-3 text-sm font-semibold tracking-wide">عملیات</th>
+                            </tr>
+                        </thead>
+                        <tbody id="overtime-records" class="divide-y divide-gray-100"></tbody>
+                    </table>
+                     <p id="no-records" class="text-center text-gray-500 py-8">هنوز هیچ سابقه‌ای ثبت نشده است.</p>
+                </div>
+            </div>
+        </main>
+        
+        <footer class="text-center mt-12 text-gray-500 text-sm">
+            <p>طراحی و توسعه جواد ابراهیمی توسط هوش مصنوعی Gemini</p>
+            <p class="mt-1">نسخه 3.0.0 (پایداری کامل)</p>
+        </footer>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 z-50 hidden opacity-0 modal-backdrop">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+            <h3 class="text-xl font-bold text-gray-800 mb-4">تنظیمات شیفت کاری</h3>
+            <p class="text-gray-600 mb-6">برای محاسبه خودکار شیفت‌ها، لطفاً الگوی کاری و تاریخ شروع چرخه شیفت خود را انتخاب کنید.</p>
+            
+            <div class="space-y-4">
+                <div>
+                    <label for="shift-pattern" class="block mb-2 font-medium text-gray-700">الگوی شیفت شما:</label>
+                    <select id="shift-pattern" class="w-full p-3 border border-gray-300 rounded-lg form-select"></select>
+                </div>
+                 <div>
+                    <label for="cycle-start-date" class="block mb-2 font-medium text-gray-700">تاریخ شروع اولین روز چرخه:</label>
+                    <input type="date" id="cycle-start-date" class="w-full p-3 border border-gray-300 rounded-lg cursor-pointer bg-white text-center">
+                    <p id="jalali-cycle-date-display" class="text-sm text-gray-500 mt-1 text-center font-semibold"></p>
+                    <p class="text-xs text-gray-500 mt-1">مثال: اگر الگوی شما ۳عصر-۳صبح-۳شب است، تاریخ اولین روز عصرکاری را وارد کنید.</p>
+                </div>
+            </div>
+
+            <div id="settings-error" class="hidden p-3 mt-4 text-sm text-red-800 rounded-lg bg-red-100"></div>
+
+            <div class="flex justify-end gap-4 mt-8">
+                <button id="settings-save-btn" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold">ذخیره تنظیمات</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div id="confirm-modal" class="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center p-4 z-50 hidden opacity-0 modal-backdrop">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-sm p-6">
+            <h3 class="text-lg font-bold text-gray-800 mb-4" id="modal-title">تایید عملیات</h3>
+            <p class="text-gray-600 mb-6" id="modal-body">آیا از انجام این کار مطمئن هستید؟</p>
+            <div class="flex flex-col-reverse sm:flex-row sm:justify-end gap-3">
+                <button id="modal-cancel-btn" class="w-full sm:w-auto px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors">انصراف</button>
+                <button id="modal-confirm-btn" class="w-full sm:w-auto px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors">تایید</button>
+            </div>
+        </div>
+    </div>
+
+<script>
+// PWA Service Worker Registration
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').then(registration => {
+            console.log('ServiceWorker registration successful');
+        }, err => {
+            console.log('ServiceWorker registration failed: ', err);
+        });
+    });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    // --- App Configuration ---
+    const config = {
+        shiftPatterns: {
+            'day_worker': {
+                name: 'روزکار (شنبه تا چهارشنبه)',
+                cycleDays: 7,
+                getShift: (dayIndex, dayOfWeek) => {
+                    return (dayOfWeek === 4 || dayOfWeek === 5) ? 
+                        { key: 'rest', name: 'روز استراحت (آخر هفته)' } : 
+                        { key: 'morning', name: 'روز کاری' };
+                }
+            },
+            'two_shift': {
+                name: 'دو شیفت (هفته‌ای صبح/عصر)',
+                cycleDays: 14,
+                 getShift: (dayIndex, dayOfWeek) => {
+                    const week = Math.floor(dayIndex / 7) % 2;
+                    const isWeekend = (dayOfWeek === 4 || dayOfWeek === 5);
+                    if (week === 0) {
+                        return isWeekend ? { key: 'rest', name: 'استراحت (هفته صبح)' } : { key: 'morning', name: 'شیفت صبح' };
+                    } else {
+                        return isWeekend ? { key: 'morning', name: 'شیفت صبح (روز تعطیل)'} : { key: 'evening', name: 'شیفت عصر' };
+                    }
+                }
+            },
+            '3_3_3_3': {
+                name: '۳ عصر، ۳ صبح، ۳ شب، ۳ استراحت',
+                cycleDays: 12,
+                getShift: (dayIndex) => {
+                    const cyclePos = dayIndex % 12;
+                    if (cyclePos < 3) return { key: 'evening', name: `روز ${cyclePos + 1} از شیفت عصر` };
+                    if (cyclePos < 6) return { key: 'morning', name: `روز ${cyclePos - 2} از شیفت صبح` };
+                    if (cyclePos < 9) return { key: 'night', name: `روز ${cyclePos - 5} از شیفت شب` };
+                    return { key: 'rest', name: `روز ${cyclePos - 8} از استراحت` };
+                }
+            },
+            '2_2_2_4': {
+                name: '۲ عصر، ۲ صبح، ۲ شب، ۴ استراحت',
+                cycleDays: 10,
+                getShift: (dayIndex) => {
+                    const cyclePos = dayIndex % 10;
+                    if (cyclePos < 2) return { key: 'evening', name: `روز ${cyclePos + 1} از شیفت عصر` };
+                    if (cyclePos < 4) return { key: 'morning', name: `روز ${cyclePos - 1} از شیفت صبح` };
+                    if (cyclePos < 6) return { key: 'night', name: `روز ${cyclePos - 3} از شیفت شب` };
+                    return { key: 'rest', name: `روز ${cyclePos - 5} از استراحت` };
+                }
+            },
+        },
+        shiftTypes: {
+            'morning': 'شیفت صبح',
+            'evening': 'شیفت عصر',
+            'night': 'شیفت شب',
+            'rest': 'استراحت',
+            'holiday': 'روز تعطیل',
+            'change_shift': 'چنج شیفت',
+        },
+    };
+    const shiftTypeMapReverse = Object.fromEntries(Object.entries(config.shiftTypes).map(([k, v]) => [v, k]));
+
+
+    // --- Element Selection ---
+    const elements = {
+        mainContent: document.getElementById('main-content'),
+        form: document.getElementById('overtime-form'),
+        dateInput: document.getElementById('date-input'),
+        jalaliDateDisplay: document.getElementById('jalali-date-display'),
+        startTimeSelect: document.getElementById('start-time'),
+        endTimeSelect: document.getElementById('end-time'),
+        descriptionInput: document.getElementById('description'),
+        shiftTypeSelect: document.getElementById('shift-type'),
+        autoShiftDisplay: document.getElementById('auto-shift-display'),
+        successorInput: document.getElementById('successor-input'),
+        recordsBody: document.getElementById('overtime-records'),
+        totalHoursDisplay: document.getElementById('total-hours-display'),
+        alertMessage: document.getElementById('alert-message'),
+        errorMessage: document.getElementById('error-message'),
+        noRecordsP: document.getElementById('no-records'),
+        confirmModal: document.getElementById('confirm-modal'),
+        modalBody: document.getElementById('modal-body'),
+        modalConfirmBtn: document.getElementById('modal-confirm-btn'),
+        modalCancelBtn: document.getElementById('modal-cancel-btn'),
+        exportBtn: document.getElementById('export-btn'),
+        importBtn: document.getElementById('import-btn'),
+        importFile: document.getElementById('import-file'),
+        deleteAllBtn: document.getElementById('delete-all-btn'),
+        settingsBtn: document.getElementById('settings-btn'),
+        settingsModal: document.getElementById('settings-modal'),
+        shiftPatternSelect: document.getElementById('shift-pattern'),
+        cycleStartDateInput: document.getElementById('cycle-start-date'),
+        jalaliCycleDateDisplay: document.getElementById('jalali-cycle-date-display'),
+        settingsSaveBtn: document.getElementById('settings-save-btn'),
+        settingsError: document.getElementById('settings-error'),
+    };
+
+    // --- State Management ---
+    let state = {
+        overtimeData: JSON.parse(localStorage.getItem('overtimeData_v3.0.0')) || [],
+        userSettings: JSON.parse(localStorage.getItem('userSettings_v3.0.0')) || null,
+        confirmCallback: null,
+        autoCalculatedShift: null,
+    };
+
+    // --- Date Conversion Helpers ---
+    const gregorianToJalali = (gregorianStr) => {
+        if (!gregorianStr) return '';
+        return moment(gregorianStr, 'YYYY-MM-DD').locale('fa').format('jYYYY/jMM/jDD');
+    };
+    const jalaliToGregorian = (jalaliStr) => {
+        if (!jalaliStr) return '';
+        return moment(jalaliStr, 'jYYYY/jMM/jDD').locale('en').format('YYYY-MM-DD');
+    };
+
+    // --- Core Functions ---
+    const saveData = () => localStorage.setItem('overtimeData_v3.0.0', JSON.stringify(state.overtimeData));
+    const saveSettings = () => localStorage.setItem('userSettings_v3.0.0', JSON.stringify(state.userSettings));
+    const calculateDuration = (start, end) => {
+       start = parseInt(start); end = parseInt(end);
+       return end > start ? end - start : 24 - start + end;
+    };
+
+    // --- UI Functions ---
+    const showModal = (modalElement) => {
+        modalElement.classList.remove('hidden');
+        setTimeout(() => modalElement.classList.remove('opacity-0'), 10);
+    };
+    const hideModal = (modalElement) => {
+        modalElement.classList.add('opacity-0');
+        setTimeout(() => {
+            modalElement.classList.add('hidden');
+            if (modalElement === elements.confirmModal) state.confirmCallback = null;
+        } , 300);
+    };
+    const showError = (message, element = elements.errorMessage) => {
+        element.textContent = message;
+        element.classList.remove('hidden');
+        setTimeout(() => element.classList.add('hidden'), 5000);
+    };
+
+    // --- Shift Calculation Logic ---
+    const calculateShiftForDate = (jalaliDateStr) => {
+        if (!state.userSettings || !state.userSettings.pattern || !state.userSettings.startDate) return null;
+        const pattern = config.shiftPatterns[state.userSettings.pattern];
+        if (!pattern) return null;
+
+        const targetDate = moment(jalaliDateStr, 'jYYYY/jMM/jDD');
+        const startDate = moment(state.userSettings.startDate, 'jYYYY/jMM/jDD');
+        
+        if (!targetDate.isValid() || !startDate.isValid()) return null;
+
+        const dayDifference = targetDate.diff(startDate, 'days');
+        const dayOfWeek = targetDate.day(); // jalali-moment: Saturday = 6, Sunday = 0, ..., Friday = 5
+        const persianDayOfWeek = (dayOfWeek + 1) % 7; // Convert to Saturday = 0, ..., Friday = 6
+
+        return pattern.getShift(dayDifference, persianDayOfWeek);
+    };
+    
+    const updateAutoShiftDisplay = (jalaliDate) => {
+        const calculatedShift = calculateShiftForDate(jalaliDate);
+        state.autoCalculatedShift = calculatedShift;
+
+        if (calculatedShift) {
+            elements.autoShiftDisplay.textContent = `تشخیص خودکار: ${calculatedShift.name}`;
+            if (elements.shiftTypeSelect.querySelector(`option[value="${calculatedShift.key}"]`)) {
+                elements.shiftTypeSelect.value = calculatedShift.key;
+            }
+        } else {
+            elements.autoShiftDisplay.textContent = '';
+        }
+    };
+    
+    // --- Render Functions ---
+    const renderRecords = () => {
+        elements.recordsBody.innerHTML = '';
+        elements.noRecordsP.style.display = state.overtimeData.length === 0 ? 'block' : 'none';
+        
+        const sortedData = [...state.overtimeData].sort((a, b) => moment(b.date, 'jYYYY/jMM/jDD').diff(moment(a.date, 'jYYYY/jMM/jDD')));
+
+        sortedData.forEach(record => {
+            const tr = document.createElement('tr');
+            tr.className = 'bg-white hover:bg-gray-50 transition';
+            if (record.isNonRoutine) tr.classList.add('non-routine-record');
+            
+            const shiftText = config.shiftTypes[record.shiftType] || record.shiftType;
+            const duration = calculateDuration(record.startTime, record.endTime);
+            tr.innerHTML = `
+                <td class="p-4 text-sm">${record.date}</td>
+                <td class="p-4 text-sm">${shiftText}</td>
+                <td class="p-4 text-sm">${record.successor || '-'}</td>
+                <td class="p-4 text-sm">${record.startTime}:00</td>
+                <td class="p-4 text-sm">${record.endTime}:00</td>
+                <td class="p-4 text-sm font-medium">${duration} ساعت</td>
+                <td class="p-4 text-sm hidden md:table-cell">${record.description || '-'}</td>
+                <td class="p-4 text-sm">
+                    <button data-date="${record.date}" class="delete-btn text-red-500 hover:text-red-700 font-semibold">حذف</button>
+                </td>
+            `;
+            elements.recordsBody.appendChild(tr);
+        });
+        updateTotalHours();
+    };
+
+    const updateTotalHours = () => {
+        const totalHours = state.overtimeData.reduce((total, record) => total + calculateDuration(record.startTime, record.endTime), 0);
+        elements.totalHoursDisplay.textContent = `مجموع اضافه کاری: ${totalHours} ساعت`;
+        elements.alertMessage.classList.toggle('hidden', totalHours <= 120);
+        if (totalHours > 120) {
+           elements.alertMessage.innerHTML = `<span class="font-medium">توجه!</span> مجموع ساعات اضافه کاری شما از ۱۲۰ ساعت عبور کرده است.`;
+        }
+    };
+
+    const populateDropdowns = () => {
+        elements.shiftTypeSelect.innerHTML = '';
+        for (const [key, value] of Object.entries(config.shiftTypes)) {
+            elements.shiftTypeSelect.add(new Option(value, key));
+        }
+        elements.startTimeSelect.innerHTML = '';
+        elements.endTimeSelect.innerHTML = '';
+        for (let i = 1; i <= 24; i++) {
+            elements.startTimeSelect.add(new Option(`${i}:00`, i));
+            elements.endTimeSelect.add(new Option(`${i}:00`, i));
+        }
+        elements.shiftPatternSelect.innerHTML = '';
+        for (const [key, value] of Object.entries(config.shiftPatterns)) {
+            elements.shiftPatternSelect.add(new Option(value.name, key));
+        }
+    };
+    
+    const setDateAndDisplay = (inputElement, displayElement, gregorianDate) => {
+        inputElement.value = gregorianDate;
+        const jalaliDate = gregorianToJalali(gregorianDate);
+        displayElement.textContent = jalaliDate;
+        return jalaliDate;
+    };
+
+    // --- Settings Modal Logic ---
+    const handleSaveSettings = () => {
+        const pattern = elements.shiftPatternSelect.value;
+        const startDateGregorian = elements.cycleStartDateInput.value;
+
+        if (!startDateGregorian) {
+            showError('لطفاً تاریخ شروع چرخه را انتخاب کنید.', elements.settingsError);
+            return;
+        }
+        
+        state.userSettings = { 
+            pattern, 
+            startDate: gregorianToJalali(startDateGregorian)
+        };
+        saveSettings();
+        hideModal(elements.settingsModal);
+        initializeMainApp();
+    };
+    
+    const openSettingsModal = () => {
+        if (state.userSettings) {
+            elements.shiftPatternSelect.value = state.userSettings.pattern;
+            const gregorianStartDate = jalaliToGregorian(state.userSettings.startDate);
+            setDateAndDisplay(elements.cycleStartDateInput, elements.jalaliCycleDateDisplay, gregorianStartDate);
+        } else {
+            const todayGregorian = moment().locale('en').format('YYYY-MM-DD');
+            setDateAndDisplay(elements.cycleStartDateInput, elements.jalaliCycleDateDisplay, todayGregorian);
+        }
+        showModal(elements.settingsModal);
+    };
+    
+    const initializeMainApp = () => {
+        elements.mainContent.classList.remove('hidden');
+        const todayGregorian = moment().locale('en').format('YYYY-MM-DD');
+        const jalaliDate = setDateAndDisplay(elements.dateInput, elements.jalaliDateDisplay, todayGregorian);
+        updateAutoShiftDisplay(jalaliDate);
+    };
+
+    // --- Event Handlers ---
+    const addEventListeners = () => {
+        elements.settingsBtn.addEventListener('click', openSettingsModal);
+        elements.settingsSaveBtn.addEventListener('click', handleSaveSettings);
+
+        elements.dateInput.addEventListener('change', (e) => {
+            const jalaliDate = setDateAndDisplay(elements.dateInput, elements.jalaliDateDisplay, e.target.value);
+            updateAutoShiftDisplay(jalaliDate);
+        });
+        
+        elements.cycleStartDateInput.addEventListener('change', (e) => {
+            setDateAndDisplay(elements.cycleStartDateInput, elements.jalaliCycleDateDisplay, e.target.value);
+        });
+
+        elements.form.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const jalaliDate = gregorianToJalali(elements.dateInput.value);
+            if (!jalaliDate) return showError('لطفاً یک تاریخ انتخاب کنید.');
+            
+            const startTime = parseInt(elements.startTimeSelect.value);
+            const description = elements.descriptionInput.value.trim();
+            let isNonRoutine = false;
+            let finalDescription = description;
+
+            if (state.autoCalculatedShift && state.autoCalculatedShift.key === 'night' && startTime < 12) {
+                isNonRoutine = true;
+                if (!finalDescription.includes('غیر روتین')) {
+                    finalDescription = (finalDescription ? finalDescription + ' - ' : '') + 'غیر روتین';
+                }
+            }
+
+            const record = {
+                date: jalaliDate,
+                startTime: elements.startTimeSelect.value,
+                endTime: elements.endTimeSelect.value,
+                description: finalDescription,
+                shiftType: elements.shiftTypeSelect.value,
+                successor: elements.successorInput.value.trim(),
+                isNonRoutine,
+            };
+
+            const existingIndex = state.overtimeData.findIndex(r => r.date === jalaliDate);
+            if (existingIndex > -1) {
+                state.overtimeData[existingIndex] = record;
+            } else {
+                state.overtimeData.push(record);
+            }
+            saveData();
+            renderRecords();
+            elements.form.reset();
+            const todayGregorian = moment().locale('en').format('YYYY-MM-DD');
+            const todayJalali = setDateAndDisplay(elements.dateInput, elements.jalaliDateDisplay, todayGregorian);
+            updateAutoShiftDisplay(todayJalali);
+        });
+
+        elements.deleteAllBtn.addEventListener('click', () => {
+            if (state.overtimeData.length === 0) return showError("هیچ سابقه‌ای برای حذف وجود ندارد.");
+            showModal(elements.confirmModal);
+            elements.modalBody.textContent = "آیا از حذف تمام سوابق مطمئن هستید؟ این عمل غیرقابل بازگشت است.";
+            elements.modalConfirmBtn.textContent = 'بله، همه را حذف کن';
+            state.confirmCallback = () => {
+                state.overtimeData = [];
+                saveData();
+                renderRecords();
+                hideModal(elements.confirmModal);
+            };
+        });
+
+        elements.recordsBody.addEventListener('click', (e) => {
+            if (e.target.classList.contains('delete-btn')) {
+                const dateToDelete = e.target.dataset.date;
+                showModal(elements.confirmModal);
+                elements.modalBody.textContent = `آیا از حذف اضافه کاری تاریخ ${dateToDelete} مطمئن هستید؟`;
+                elements.modalConfirmBtn.textContent = 'تایید و حذف';
+                state.confirmCallback = () => {
+                    state.overtimeData = state.overtimeData.filter(r => r.date !== dateToDelete);
+                    saveData();
+                    renderRecords();
+                    hideModal(elements.confirmModal);
+                };
+            }
+        });
+        
+        elements.modalConfirmBtn.addEventListener('click', () => { if (state.confirmCallback) state.confirmCallback(); });
+        elements.modalCancelBtn.addEventListener('click', () => hideModal(elements.confirmModal));
+        
+        elements.importBtn.addEventListener('click', () => elements.importFile.click());
+        elements.importFile.addEventListener('change', importFromExcel);
+        elements.exportBtn.addEventListener('click', exportToExcel);
+    };
+    
+    // --- Excel Import/Export ---
+    const exportToExcel = () => {
+        if(state.overtimeData.length === 0) return showError("داده ای برای خروجی نیست");
+        const data = state.overtimeData.map(r => ({
+            'تاریخ': r.date,
+            'نوع شیفت': config.shiftTypes[r.shiftType] || r.shiftType,
+            'جانشین': r.successor || '',
+            'ساعت شروع': r.startTime,
+            'ساعت پایان': r.endTime,
+            'توضیحات': r.description || '',
+            'غیر روتین': r.isNonRoutine ? 'بله' : 'خیر'
+        }));
+        const ws = XLSX.utils.json_to_sheet(data);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Overtime");
+        XLSX.writeFile(wb, "OvertimeRecords.xlsx");
+    };
+
+    const importFromExcel = (event) => {
+        const file = event.target.files[0];
+        if(!file) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, {type: 'array'});
+                const ws = workbook.Sheets[workbook.SheetNames[0]];
+                const jsonData = XLSX.utils.sheet_to_json(ws);
+                if (jsonData.length === 0) return showError("فایل اکسل خالی یا نامعتبر است.");
+
+                const currentDataMap = state.overtimeData.reduce((map, item) => {
+                    map[item.date] = item;
+                    return map;
+                }, {});
+
+                let importedCount = 0;
+                jsonData.forEach(row => {
+                    let dateStr = row['تاریخ'];
+                    const date = String(dateStr || '').trim();
+
+                    if(moment(date, 'jYYYY/jMM/jDD', true).isValid()) {
+                        const shiftTypePersian = row['نوع شیفت'];
+                        currentDataMap[date] = {
+                            date,
+                            shiftType: shiftTypeMapReverse[shiftTypePersian] || 'change_shift',
+                            successor: String(row['جانشین'] || '').trim(),
+                            startTime: String(row['ساعت شروع'] || '1').trim(),
+                            endTime: String(row['ساعت پایان'] || '1').trim(),
+                            description: String(row['توضیحات'] || '').trim(),
+                            isNonRoutine: (String(row['غیر روتین']).toLowerCase() === 'بله')
+                        };
+                        importedCount++;
+                    }
+                });
+                
+                if (importedCount > 0) {
+                    state.overtimeData = Object.values(currentDataMap);
+                    saveData();
+                    renderRecords();
+                } else {
+                    showError("هیچ رکورد معتبری در فایل اکسل یافت نشد. مطمئن شوید فرمت تاریخ jYYYY/jMM/jDD است.");
+                }
+
+            } catch (err) {
+                console.error("Import Error: ", err);
+                showError("خطا در پردازش فایل اکسل.");
+            } finally {
+                elements.importFile.value = '';
+            }
+        };
+        reader.readAsArrayBuffer(file);
+    };
+
+    // --- INITIALIZATION ---
+    const init = () => {
+        try {
+            populateDropdowns();
+            addEventListeners();
+            renderRecords();
+
+            if (!state.userSettings) {
+                openSettingsModal();
+            } else {
+                initializeMainApp();
+            }
+        } catch(e) {
+            console.error("Initialization failed:", e);
+            document.body.innerHTML = '<div class="text-center p-8 text-red-600">یک خطای غیرمنتظره رخ داد. لطفاً حافظه کش مرورگر را پاک کرده و دوباره امتحان کنید.</div>';
+        }
+    };
+
+    init();
+});
+</script>
+</body>
+</html>
