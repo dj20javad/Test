@@ -13,10 +13,6 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;700&display=swap" rel="stylesheet">
     
-    <!-- Persian Datepicker Files -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/persian-datepicker@1.2.0/dist/css/persian-datepicker.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/persian-datepicker@1.2.0/dist/js/persian-datepicker.min.js"></script>
-    
     <script src="https://unpkg.com/jalali-moment/dist/jalali-moment.browser.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
@@ -33,13 +29,12 @@
         .modal-backdrop { transition: opacity 0.3s ease; }
         .non-routine-record td { color: #dc2626; font-weight: 700; }
         #settings-modal:not(.hidden) { backdrop-filter: blur(4px); }
-        /* Datepicker custom styles & BUG FIX */
-        .pdp-container { z-index: 1000 !important; } /* CRITICAL FIX for visibility */
-        .pdp-group .pdp-header { background-color: #3b82f6 !important; }
-        .pdp-group .pdp-header .pdp-month-name, .pdp-group .pdp-header .pdp-year-name { color: white !important; }
-        .pdp-group .pdp-header .pdp-nav-btn.pdp-prev-btn, .pdp-group .pdp-header .pdp-nav-btn.pdp-next-btn { fill: white !important; }
-        .pdp-group .pdp-toolbox .pdp-btn-today { background-color: #1e40af !important; color: white !important; }
-        .pdp-day.pdp-selected { background-color: #2563eb !important; }
+        /* Style for native date picker to make the whole area clickable */
+        input[type="date"] { position: relative; }
+        input[type="date"]::-webkit-calendar-picker-indicator {
+            position: absolute; top: 0; right: 0; width: 100%; height: 100%;
+            margin: 0; padding: 0; color: transparent; background: transparent; cursor: pointer;
+        }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800">
@@ -64,7 +59,8 @@
                 <form id="overtime-form" class="grid grid-cols-1 md:grid-cols-2 gap-6">
                      <div>
                         <label for="date-input" class="block mb-2 font-medium text-gray-700">تاریخ</label>
-                        <input type="text" id="date-input" placeholder="برای انتخاب تاریخ کلیک کنید" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition cursor-pointer bg-white">
+                        <input type="date" id="date-input" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition cursor-pointer bg-white text-center">
+                        <p id="jalali-date-display" class="text-sm text-gray-500 mt-1 text-center font-semibold h-5"></p>
                     </div>
 
                     <div>
@@ -147,7 +143,7 @@
         
         <footer class="text-center mt-12 text-gray-500 text-sm">
             <p>طراحی و توسعه جواد ابراهیمی توسط هوش مصنوعی Gemini</p>
-            <p class="mt-1">نسخه 3.1.0 (تقویم شمسی)</p>
+            <p class="mt-1">نسخه 3.2.0 (نسخه پایدار نهایی)</p>
         </footer>
     </div>
 
@@ -164,7 +160,8 @@
                 </div>
                  <div>
                     <label for="cycle-start-date" class="block mb-2 font-medium text-gray-700">تاریخ شروع اولین روز چرخه:</label>
-                    <input type="text" id="cycle-start-date" placeholder="برای انتخاب کلیک کنید" class="w-full p-3 border border-gray-300 rounded-lg cursor-pointer bg-white">
+                    <input type="date" id="cycle-start-date" class="w-full p-3 border border-gray-300 rounded-lg cursor-pointer bg-white text-center">
+                    <p id="jalali-cycle-date-display" class="text-sm text-gray-500 mt-1 text-center font-semibold h-5"></p>
                     <p class="text-xs text-gray-500 mt-1">مثال: اگر الگوی شما ۳عصر-۳صبح-۳شب است، تاریخ اولین روز عصرکاری را وارد کنید.</p>
                 </div>
             </div>
@@ -202,302 +199,213 @@ if ('serviceWorker' in navigator) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    // --- App Configuration ---
-    const config = {
-        shiftPatterns: {
-            'day_worker': {
-                name: 'روزکار (شنبه تا چهارشنبه)',
-                cycleDays: 7,
-                getShift: (dayIndex, dayOfWeek) => {
-                    return (dayOfWeek === 4 || dayOfWeek === 5) ? 
+    try {
+        // --- App Configuration ---
+        const config = {
+            shiftPatterns: {
+                'day_worker': {
+                    name: 'روزکار (شنبه تا چهارشنبه)',
+                    getShift: (dayIndex, dayOfWeek) => (dayOfWeek === 4 || dayOfWeek === 5) ? 
                         { key: 'rest', name: 'روز استراحت (آخر هفته)' } : 
-                        { key: 'morning', name: 'روز کاری' };
-                }
-            },
-            'two_shift': {
-                name: 'دو شیفت (هفته‌ای صبح/عصر)',
-                cycleDays: 14,
-                 getShift: (dayIndex, dayOfWeek) => {
-                    const week = Math.floor(dayIndex / 7) % 2;
-                    const isWeekend = (dayOfWeek === 4 || dayOfWeek === 5);
-                    if (week === 0) {
-                        return isWeekend ? { key: 'rest', name: 'استراحت (هفته صبح)' } : { key: 'morning', name: 'شیفت صبح' };
-                    } else {
+                        { key: 'morning', name: 'روز کاری' }
+                },
+                'two_shift': {
+                    name: 'دو شیفت (هفته‌ای صبح/عصر)',
+                    getShift: (dayIndex, dayOfWeek) => {
+                        const week = Math.floor(dayIndex / 7) % 2;
+                        const isWeekend = (dayOfWeek === 4 || dayOfWeek === 5);
+                        if (week === 0) return isWeekend ? { key: 'rest', name: 'استراحت (هفته صبح)' } : { key: 'morning', name: 'شیفت صبح' };
                         return isWeekend ? { key: 'morning', name: 'شیفت صبح (روز تعطیل)'} : { key: 'evening', name: 'شیفت عصر' };
                     }
-                }
+                },
+                '3_3_3_3': {
+                    name: '۳ عصر، ۳ صبح، ۳ شب، ۳ استراحت',
+                    getShift: (dayIndex) => {
+                        const cyclePos = dayIndex % 12;
+                        if (cyclePos < 3) return { key: 'evening', name: `روز ${cyclePos + 1} عصر` };
+                        if (cyclePos < 6) return { key: 'morning', name: `روز ${cyclePos - 2} صبح` };
+                        if (cyclePos < 9) return { key: 'night', name: `روز ${cyclePos - 5} شب` };
+                        return { key: 'rest', name: `روز ${cyclePos - 8} استراحت` };
+                    }
+                },
+                '2_2_2_4': {
+                    name: '۲ عصر، ۲ صبح، ۲ شب، ۴ استراحت',
+                    getShift: (dayIndex) => {
+                        const cyclePos = dayIndex % 10;
+                        if (cyclePos < 2) return { key: 'evening', name: `روز ${cyclePos + 1} عصر` };
+                        if (cyclePos < 4) return { key: 'morning', name: `روز ${cyclePos - 1} صبح` };
+                        if (cyclePos < 6) return { key: 'night', name: `روز ${cyclePos - 3} شب` };
+                        return { key: 'rest', name: `روز ${cyclePos - 5} استراحت` };
+                    }
+                },
             },
-            '3_3_3_3': {
-                name: '۳ عصر، ۳ صبح، ۳ شب، ۳ استراحت',
-                cycleDays: 12,
-                getShift: (dayIndex) => {
-                    const cyclePos = dayIndex % 12;
-                    if (cyclePos < 3) return { key: 'evening', name: `روز ${cyclePos + 1} از شیفت عصر` };
-                    if (cyclePos < 6) return { key: 'morning', name: `روز ${cyclePos - 2} از شیفت صبح` };
-                    if (cyclePos < 9) return { key: 'night', name: `روز ${cyclePos - 5} از شیفت شب` };
-                    return { key: 'rest', name: `روز ${cyclePos - 8} از استراحت` };
-                }
+            shiftTypes: {
+                'morning': 'شیفت صبح', 'evening': 'شیفت عصر', 'night': 'شیفت شب',
+                'rest': 'استراحت', 'holiday': 'روز تعطیل', 'change_shift': 'چنج شیفت',
             },
-            '2_2_2_4': {
-                name: '۲ عصر، ۲ صبح، ۲ شب، ۴ استراحت',
-                cycleDays: 10,
-                getShift: (dayIndex) => {
-                    const cyclePos = dayIndex % 10;
-                    if (cyclePos < 2) return { key: 'evening', name: `روز ${cyclePos + 1} از شیفت عصر` };
-                    if (cyclePos < 4) return { key: 'morning', name: `روز ${cyclePos - 1} از شیفت صبح` };
-                    if (cyclePos < 6) return { key: 'night', name: `روز ${cyclePos - 3} از شیفت شب` };
-                    return { key: 'rest', name: `روز ${cyclePos - 5} از استراحت` };
-                }
-            },
-        },
-        shiftTypes: {
-            'morning': 'شیفت صبح',
-            'evening': 'شیفت عصر',
-            'night': 'شیفت شب',
-            'rest': 'استراحت',
-            'holiday': 'روز تعطیل',
-            'change_shift': 'چنج شیفت',
-        },
-        datepickerOptions: {
-            format: 'YYYY/MM/DD',
-            autoClose: true,
-            observer: true, 
-            navigator: { enabled: true, text: { btnNextText: '>', btnPrevText: '<' } },
-            toolbox: { enabled: true, text: { btnToday: 'امروز' } }
-        }
-    };
-    const shiftTypeMapReverse = Object.fromEntries(Object.entries(config.shiftTypes).map(([k, v]) => [v, k]));
+        };
+        const shiftTypeMapReverse = Object.fromEntries(Object.entries(config.shiftTypes).map(([k, v]) => [v, k]));
 
-
-    // --- Element Selection ---
-    const elements = {
-        mainContent: document.getElementById('main-content'),
-        form: document.getElementById('overtime-form'),
-        dateInput: document.getElementById('date-input'),
-        startTimeSelect: document.getElementById('start-time'),
-        endTimeSelect: document.getElementById('end-time'),
-        descriptionInput: document.getElementById('description'),
-        shiftTypeSelect: document.getElementById('shift-type'),
-        autoShiftDisplay: document.getElementById('auto-shift-display'),
-        successorInput: document.getElementById('successor-input'),
-        recordsBody: document.getElementById('overtime-records'),
-        totalHoursDisplay: document.getElementById('total-hours-display'),
-        alertMessage: document.getElementById('alert-message'),
-        errorMessage: document.getElementById('error-message'),
-        noRecordsP: document.getElementById('no-records'),
-        confirmModal: document.getElementById('confirm-modal'),
-        modalBody: document.getElementById('modal-body'),
-        modalConfirmBtn: document.getElementById('modal-confirm-btn'),
-        modalCancelBtn: document.getElementById('modal-cancel-btn'),
-        exportBtn: document.getElementById('export-btn'),
-        importBtn: document.getElementById('import-btn'),
-        importFile: document.getElementById('import-file'),
-        deleteAllBtn: document.getElementById('delete-all-btn'),
-        settingsBtn: document.getElementById('settings-btn'),
-        settingsModal: document.getElementById('settings-modal'),
-        shiftPatternSelect: document.getElementById('shift-pattern'),
-        cycleStartDateInput: document.getElementById('cycle-start-date'),
-        settingsSaveBtn: document.getElementById('settings-save-btn'),
-        settingsError: document.getElementById('settings-error'),
-    };
-
-    // --- State Management ---
-    let state = {
-        overtimeData: JSON.parse(localStorage.getItem('overtimeData_v3.1.0')) || [],
-        userSettings: JSON.parse(localStorage.getItem('userSettings_v3.1.0')) || null,
-        confirmCallback: null,
-        autoCalculatedShift: null,
-        datepickers: {
-            main: null,
-            settings: null
-        }
-    };
-
-    // --- Core Functions ---
-    const saveData = () => localStorage.setItem('overtimeData_v3.1.0', JSON.stringify(state.overtimeData));
-    const saveSettings = () => localStorage.setItem('userSettings_v3.1.0', JSON.stringify(state.userSettings));
-    const calculateDuration = (start, end) => {
-       start = parseInt(start); end = parseInt(end);
-       return end > start ? end - start : 24 - start + end;
-    };
-
-    // --- UI Functions ---
-    const showModal = (modalElement) => {
-        modalElement.classList.remove('hidden');
-        setTimeout(() => modalElement.classList.remove('opacity-0'), 10);
-    };
-    const hideModal = (modalElement) => {
-        modalElement.classList.add('opacity-0');
-        setTimeout(() => {
-            modalElement.classList.add('hidden');
-            if (modalElement === elements.confirmModal) state.confirmCallback = null;
-        } , 300);
-    };
-    const showError = (message, element = elements.errorMessage) => {
-        element.textContent = message;
-        element.classList.remove('hidden');
-        setTimeout(() => element.classList.add('hidden'), 5000);
-    };
-
-    // --- Shift Calculation Logic ---
-    const calculateShiftForDate = (jalaliDateStr) => {
-        if (!state.userSettings || !state.userSettings.pattern || !state.userSettings.startDate) return null;
-        const pattern = config.shiftPatterns[state.userSettings.pattern];
-        if (!pattern) return null;
-
-        const targetDate = moment(jalaliDateStr, 'jYYYY/jMM/DD');
-        const startDate = moment(state.userSettings.startDate, 'jYYYY/jMM/DD');
+        // --- Element Selection ---
+        const elements = Object.fromEntries(Array.from(document.querySelectorAll('[id]')).map(el => [
+            el.id.replace(/-(\w)/g, (match, letter) => letter.toUpperCase()), // a-b -> aB
+            el
+        ]));
         
-        if (!targetDate.isValid() || !startDate.isValid()) return null;
+        // --- State Management ---
+        let state = {
+            overtimeData: JSON.parse(localStorage.getItem('overtimeData_v3.2.0')) || [],
+            userSettings: JSON.parse(localStorage.getItem('userSettings_v3.2.0')) || null,
+            confirmCallback: null,
+            autoCalculatedShift: null,
+        };
 
-        const dayDifference = targetDate.diff(startDate, 'days');
-        const dayOfWeek = targetDate.day(); // jalali-moment: Saturday = 6, Sunday = 0, ..., Friday = 5
-        const persianDayOfWeek = (dayOfWeek + 1) % 7; // Convert to Saturday = 0, ..., Friday = 6
+        // --- Date Conversion Helpers ---
+        const gregorianToJalali = g => g ? moment(g, 'YYYY-MM-DD').locale('fa').format('jYYYY/jMM/jDD') : '';
+        const jalaliToGregorian = j => j ? moment(j, 'jYYYY/jMM/jDD').locale('en').format('YYYY-MM-DD') : '';
 
-        return pattern.getShift(dayDifference, persianDayOfWeek);
-    };
-    
-    const updateAutoShiftDisplay = () => {
-        const date = elements.dateInput.value;
-        const calculatedShift = calculateShiftForDate(date);
-        state.autoCalculatedShift = calculatedShift;
+        // --- Core Functions ---
+        const saveData = () => localStorage.setItem('overtimeData_v3.2.0', JSON.stringify(state.overtimeData));
+        const saveSettings = () => localStorage.setItem('userSettings_v3.2.0', JSON.stringify(state.userSettings));
+        const calculateDuration = (start, end) => (parseInt(end) > parseInt(start)) ? (end - start) : (24 - start + parseInt(end));
 
-        if (calculatedShift) {
-            elements.autoShiftDisplay.textContent = `تشخیص خودکار: ${calculatedShift.name}`;
-            if (elements.shiftTypeSelect.querySelector(`option[value="${calculatedShift.key}"]`)) {
-                elements.shiftTypeSelect.value = calculatedShift.key;
+        // --- UI Functions ---
+        const showModal = (modal) => {
+            modal.classList.remove('hidden');
+            setTimeout(() => modal.classList.remove('opacity-0'), 10);
+        };
+        const hideModal = (modal) => {
+            modal.classList.add('opacity-0');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+                if (modal === elements.confirmModal) state.confirmCallback = null;
+            }, 300);
+        };
+        const showError = (message, el = elements.errorMessage) => {
+            el.textContent = message;
+            el.classList.remove('hidden');
+            setTimeout(() => el.classList.add('hidden'), 5000);
+        };
+
+        // --- Shift Calculation Logic ---
+        const calculateShiftForDate = (jalaliDateStr) => {
+            if (!state.userSettings?.pattern || !state.userSettings?.startDate) return null;
+            const pattern = config.shiftPatterns[state.userSettings.pattern];
+            if (!pattern) return null;
+
+            const targetDate = moment(jalaliDateStr, 'jYYYY/jMM/jDD');
+            const startDate = moment(state.userSettings.startDate, 'jYYYY/jMM/jDD');
+            if (!targetDate.isValid() || !startDate.isValid()) return null;
+
+            const dayDifference = targetDate.diff(startDate, 'days');
+            const persianDayOfWeek = (targetDate.day() + 1) % 7; // Saturday: 0
+            return pattern.getShift(dayDifference, persianDayOfWeek);
+        };
+
+        const updateAutoShiftDisplay = (jalaliDate) => {
+            const calculatedShift = calculateShiftForDate(jalaliDate);
+            state.autoCalculatedShift = calculatedShift;
+            if (calculatedShift) {
+                elements.autoShiftDisplay.textContent = `تشخیص خودکار: ${calculatedShift.name}`;
+                if (elements.shiftTypeSelect.querySelector(`option[value="${calculatedShift.key}"]`)) {
+                    elements.shiftTypeSelect.value = calculatedShift.key;
+                }
+            } else {
+                elements.autoShiftDisplay.textContent = '';
             }
-        } else {
-            elements.autoShiftDisplay.textContent = '';
-        }
-    };
-    
-    // --- Render Functions ---
-    const renderRecords = () => {
-        elements.recordsBody.innerHTML = '';
-        elements.noRecordsP.style.display = state.overtimeData.length === 0 ? 'block' : 'none';
-        
-        const sortedData = [...state.overtimeData].sort((a, b) => moment(b.date, 'jYYYY/jMM/jDD').diff(moment(a.date, 'jYYYY/jMM/jDD')));
+        };
 
-        sortedData.forEach(record => {
-            const tr = document.createElement('tr');
-            tr.className = 'bg-white hover:bg-gray-50 transition';
-            if (record.isNonRoutine) tr.classList.add('non-routine-record');
+        // --- Render Functions ---
+        const renderRecords = () => {
+            elements.overtimeRecords.innerHTML = '';
+            elements.noRecords.style.display = state.overtimeData.length === 0 ? 'block' : 'none';
             
-            const shiftText = config.shiftTypes[record.shiftType] || record.shiftType;
-            const duration = calculateDuration(record.startTime, record.endTime);
-            tr.innerHTML = `
-                <td class="p-4 text-sm">${record.date}</td>
-                <td class="p-4 text-sm">${shiftText}</td>
-                <td class="p-4 text-sm">${record.successor || '-'}</td>
-                <td class="p-4 text-sm">${record.startTime}:00</td>
-                <td class="p-4 text-sm">${record.endTime}:00</td>
-                <td class="p-4 text-sm font-medium">${duration} ساعت</td>
-                <td class="p-4 text-sm hidden md:table-cell">${record.description || '-'}</td>
-                <td class="p-4 text-sm">
-                    <button data-date="${record.date}" class="delete-btn text-red-500 hover:text-red-700 font-semibold">حذف</button>
-                </td>
-            `;
-            elements.recordsBody.appendChild(tr);
-        });
-        updateTotalHours();
-    };
+            const sortedData = [...state.overtimeData].sort((a, b) => moment(b.date, 'jYYYY/jMM/jDD').diff(moment(a.date, 'jYYYY/jMM/jDD')));
 
-    const updateTotalHours = () => {
-        const totalHours = state.overtimeData.reduce((total, record) => total + calculateDuration(record.startTime, record.endTime), 0);
-        elements.totalHoursDisplay.textContent = `مجموع اضافه کاری: ${totalHours} ساعت`;
-        elements.alertMessage.classList.toggle('hidden', totalHours <= 120);
-        if (totalHours > 120) {
-           elements.alertMessage.innerHTML = `<span class="font-medium">توجه!</span> مجموع ساعات اضافه کاری شما از ۱۲۰ ساعت عبور کرده است.`;
-        }
-    };
+            sortedData.forEach(record => {
+                const tr = document.createElement('tr');
+                tr.className = 'bg-white hover:bg-gray-50 transition' + (record.isNonRoutine ? ' non-routine-record' : '');
+                tr.innerHTML = `
+                    <td class="p-4 text-sm">${record.date}</td>
+                    <td class="p-4 text-sm">${config.shiftTypes[record.shiftType] || ''}</td>
+                    <td class="p-4 text-sm">${record.successor || '-'}</td>
+                    <td class="p-4 text-sm">${record.startTime}:00</td>
+                    <td class="p-4 text-sm">${record.endTime}:00</td>
+                    <td class="p-4 text-sm font-medium">${calculateDuration(record.startTime, record.endTime)} ساعت</td>
+                    <td class="p-4 text-sm hidden md:table-cell">${record.description || '-'}</td>
+                    <td class="p-4 text-sm"><button data-date="${record.date}" class="delete-btn text-red-500 hover:text-red-700 font-semibold">حذف</button></td>
+                `;
+                elements.overtimeRecords.appendChild(tr);
+            });
+            updateTotalHours();
+        };
 
-    const populateDropdowns = () => {
-        elements.shiftTypeSelect.innerHTML = '';
-        for (const [key, value] of Object.entries(config.shiftTypes)) {
-            elements.shiftTypeSelect.add(new Option(value, key));
-        }
-        elements.startTimeSelect.innerHTML = '';
-        elements.endTimeSelect.innerHTML = '';
-        for (let i = 1; i <= 24; i++) {
-            elements.startTimeSelect.add(new Option(`${i}:00`, i));
-            elements.endTimeSelect.add(new Option(`${i}:00`, i));
-        }
-        elements.shiftPatternSelect.innerHTML = '';
-        for (const [key, value] of Object.entries(config.shiftPatterns)) {
-            elements.shiftPatternSelect.add(new Option(value.name, key));
-        }
-    };
+        const updateTotalHours = () => {
+            const totalHours = state.overtimeData.reduce((total, record) => total + calculateDuration(record.startTime, record.endTime), 0);
+            elements.totalHoursDisplay.textContent = `مجموع اضافه کاری: ${totalHours} ساعت`;
+            elements.alertMessage.classList.toggle('hidden', totalHours <= 120);
+            if (totalHours > 120) elements.alertMessage.innerHTML = `<span class="font-medium">توجه!</span> مجموع ساعات شما از ۱۲۰ ساعت عبور کرده.`;
+        };
 
-    // --- View Initializers ---
-    const initializeMainApp = () => {
-        elements.mainContent.classList.remove('hidden');
-        if (!state.datepickers.main) {
-            state.datepickers.main = new persianDatepicker(elements.dateInput, config.datepickerOptions);
-            elements.dateInput.setAttribute('readonly', 'readonly'); // Prevent keyboard
-        }
-        elements.dateInput.value = moment().locale('fa').format('YYYY/MM/DD');
-        updateAutoShiftDisplay();
-    };
+        const populateDropdowns = () => {
+            ['shiftTypeSelect', 'shiftPatternSelect'].forEach(key => {
+                const select = elements[key];
+                const source = key === 'shiftTypeSelect' ? config.shiftTypes : config.shiftPatterns;
+                select.innerHTML = '';
+                for (const [k, v] of Object.entries(source)) {
+                    select.add(new Option(v.name || v, k));
+                }
+            });
+            ['startTimeSelect', 'endTimeSelect'].forEach(key => {
+                const select = elements[key];
+                select.innerHTML = '';
+                for (let i = 1; i <= 24; i++) select.add(new Option(`${i}:00`, i));
+            });
+        };
 
-    const openSettingsModal = () => {
-        if (!state.datepickers.settings) {
-            state.datepickers.settings = new persianDatepicker(elements.cycleStartDateInput, config.datepickerOptions);
-            elements.cycleStartDateInput.setAttribute('readonly', 'readonly');
-        }
+        const setDateAndDisplay = (input, display, gregorianDate) => {
+            input.value = gregorianDate;
+            const jalaliDate = gregorianToJalali(gregorianDate);
+            display.textContent = jalaliDate;
+            return jalaliDate;
+        };
 
-        if (state.userSettings) {
-            elements.shiftPatternSelect.value = state.userSettings.pattern;
-            elements.cycleStartDateInput.value = state.userSettings.startDate;
-        } else {
-            elements.cycleStartDateInput.value = moment().locale('fa').format('YYYY/MM/DD');
-        }
+        // --- Event Handlers & Logic ---
+        const handleSaveSettings = () => {
+            const gregorianStartDate = elements.cycleStartDateInput.value;
+            if (!gregorianStartDate) return showError('لطفاً تاریخ شروع را انتخاب کنید.', elements.settingsError);
+            state.userSettings = { pattern: elements.shiftPatternSelect.value, startDate: gregorianToJalali(gregorianStartDate) };
+            saveSettings();
+            hideModal(elements.settingsModal);
+            initializeMainApp();
+        };
 
-        showModal(elements.settingsModal);
-    };
+        const initializeMainApp = () => {
+            elements.mainContent.classList.remove('hidden');
+            const todayGregorian = moment().locale('en').format('YYYY-MM-DD');
+            const jalaliDate = setDateAndDisplay(elements.dateInput, elements.jalaliDateDisplay, todayGregorian);
+            updateAutoShiftDisplay(jalaliDate);
+        };
+        
+        const openSettingsModal = () => {
+            const gregorianDate = state.userSettings ? jalaliToGregorian(state.userSettings.startDate) : moment().locale('en').format('YYYY-MM-DD');
+            if(state.userSettings) elements.shiftPatternSelect.value = state.userSettings.pattern;
+            setDateAndDisplay(elements.cycleStartDateInput, elements.jalaliCycleDateDisplay, gregorianDate);
+            showModal(elements.settingsModal);
+        };
 
-    // --- Settings Modal Logic ---
-    const handleSaveSettings = () => {
-        const pattern = elements.shiftPatternSelect.value;
-        const startDate = elements.cycleStartDateInput.value.trim();
-
-        if (!moment(startDate, 'jYYYY/MM/DD', true).isValid()) {
-            showError('لطفاً تاریخ شروع چرخه را انتخاب کنید.', elements.settingsError);
-            return;
-        }
-
-        state.userSettings = { pattern, startDate };
-        saveSettings();
-        hideModal(elements.settingsModal);
-        initializeMainApp();
-    };
-
-    // --- Event Handlers ---
-    const addEventListeners = () => {
-        elements.settingsBtn.addEventListener('click', openSettingsModal);
-        elements.settingsSaveBtn.addEventListener('click', handleSaveSettings);
-
-        elements.dateInput.addEventListener('change', updateAutoShiftDisplay);
-
-        elements.form.addEventListener('submit', (e) => {
+        const handleFormSubmit = (e) => {
             e.preventDefault();
-            const date = elements.dateInput.value.trim();
-            if (!date) return showError('لطفاً یک تاریخ انتخاب کنید.');
-            
-            const startTime = parseInt(elements.startTimeSelect.value);
-            const description = elements.descriptionInput.value.trim();
-            let isNonRoutine = false;
-            let finalDescription = description;
+            const jalaliDate = gregorianToJalali(elements.dateInput.value);
+            if (!jalaliDate) return showError('لطفاً یک تاریخ انتخاب کنید.');
 
-            if (state.autoCalculatedShift && state.autoCalculatedShift.key === 'night' && startTime < 12) {
-                isNonRoutine = true;
-                if (!finalDescription.includes('غیر روتین')) {
-                    finalDescription = (finalDescription ? finalDescription + ' - ' : '') + 'غیر روتین';
-                }
-            }
+            const description = elements.descriptionInput.value.trim();
+            const startTime = parseInt(elements.startTimeSelect.value);
+            const isNonRoutine = state.autoCalculatedShift?.key === 'night' && startTime < 12;
+            const finalDescription = isNonRoutine && !description.includes('غیر روتین') ? `${description} - غیر روتین`.trim() : description;
 
             const record = {
-                date,
+                date: jalaliDate,
                 startTime: elements.startTimeSelect.value,
                 endTime: elements.endTimeSelect.value,
                 description: finalDescription,
@@ -506,21 +414,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 isNonRoutine,
             };
 
-            const existingIndex = state.overtimeData.findIndex(r => r.date === date);
-            if (existingIndex > -1) {
-                state.overtimeData[existingIndex] = record;
-            } else {
-                state.overtimeData.push(record);
-            }
+            const existingIndex = state.overtimeData.findIndex(r => r.date === jalaliDate);
+            if (existingIndex > -1) state.overtimeData[existingIndex] = record;
+            else state.overtimeData.push(record);
+            
             saveData();
             renderRecords();
-            elements.form.reset();
-            elements.dateInput.value = moment().locale('fa').format('YYYY/MM/DD');
-            updateAutoShiftDisplay();
-        });
-
-        elements.deleteAllBtn.addEventListener('click', () => {
-            if (state.overtimeData.length === 0) return showError("هیچ سابقه‌ای برای حذف وجود ندارد.");
+            elements.overtimeForm.reset();
+            const todayGregorian = moment().locale('en').format('YYYY-MM-DD');
+            const todayJalali = setDateAndDisplay(elements.dateInput, elements.jalaliDateDisplay, todayGregorian);
+            updateAutoShiftDisplay(todayJalali);
+        };
+        
+        const handleDeleteAll = () => {
+            if (state.overtimeData.length === 0) return showError("هیچ سابقه‌ای برای حذف نیست.");
             showModal(elements.confirmModal);
             elements.modalBody.textContent = "آیا از حذف تمام سوابق مطمئن هستید؟ این عمل غیرقابل بازگشت است.";
             elements.modalConfirmBtn.textContent = 'بله، همه را حذف کن';
@@ -530,10 +437,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 renderRecords();
                 hideModal(elements.confirmModal);
             };
-        });
-
-        elements.recordsBody.addEventListener('click', (e) => {
-            if (e.target.classList.contains('delete-btn')) {
+        };
+        
+        const handleDeleteSingle = (e) => {
+             if (e.target.classList.contains('delete-btn')) {
                 const dateToDelete = e.target.dataset.date;
                 showModal(elements.confirmModal);
                 elements.modalBody.textContent = `آیا از حذف اضافه کاری تاریخ ${dateToDelete} مطمئن هستید؟`;
@@ -545,108 +452,88 @@ document.addEventListener('DOMContentLoaded', () => {
                     hideModal(elements.confirmModal);
                 };
             }
-        });
-        
-        elements.modalConfirmBtn.addEventListener('click', () => { if (state.confirmCallback) state.confirmCallback(); });
+        };
+
+        // --- Excel Import/Export ---
+        const exportToExcel = () => {
+            if(state.overtimeData.length === 0) return showError("داده ای برای خروجی نیست");
+            const data = state.overtimeData.map(r => ({
+                'تاریخ': r.date, 'نوع شیفت': config.shiftTypes[r.shiftType] || '', 'جانشین': r.successor || '',
+                'ساعت شروع': r.startTime, 'ساعت پایان': r.endTime, 'توضیحات': r.description || '',
+                'غیر روتین': r.isNonRoutine ? 'بله' : 'خیر'
+            }));
+            const ws = XLSX.utils.json_to_sheet(data);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Overtime");
+            XLSX.writeFile(wb, "OvertimeRecords.xlsx");
+        };
+
+        const importFromExcel = (event) => {
+            const file = event.target.files[0];
+            if(!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, {type: 'array'});
+                    const ws = workbook.Sheets[workbook.SheetNames[0]];
+                    const jsonData = XLSX.utils.sheet_to_json(ws);
+                    if (jsonData.length === 0) return showError("فایل اکسل خالی یا نامعتبر است.");
+                    
+                    const currentDataMap = state.overtimeData.reduce((map, item) => ({...map, [item.date]: item}), {});
+                    let importedCount = 0;
+                    
+                    jsonData.forEach(row => {
+                        const date = String(row['تاریخ'] || '').trim();
+                        if(moment(date, 'jYYYY/jMM/jDD', true).isValid()) {
+                            currentDataMap[date] = {
+                                date,
+                                shiftType: shiftTypeMapReverse[row['نوع شیفت']] || 'change_shift',
+                                successor: String(row['جانشین'] || ''), startTime: String(row['ساعت شروع'] || '1'),
+                                endTime: String(row['ساعت پایان'] || '1'), description: String(row['توضیحات'] || ''),
+                                isNonRoutine: String(row['غیر روتین']).toLowerCase() === 'بله'
+                            };
+                            importedCount++;
+                        }
+                    });
+                    
+                    if (importedCount > 0) {
+                        state.overtimeData = Object.values(currentDataMap);
+                        saveData();
+                        renderRecords();
+                    } else {
+                        showError("هیچ رکورد معتبری در فایل اکسل یافت نشد.");
+                    }
+                } catch (err) { showError("خطا در پردازش فایل اکسل."); } 
+                finally { elements.importFile.value = ''; }
+            };
+            reader.readAsArrayBuffer(file);
+        };
+
+        // --- INITIALIZATION ---
+        populateDropdowns();
+        renderRecords();
+
+        elements.settingsBtn.addEventListener('click', openSettingsModal);
+        elements.settingsSaveBtn.addEventListener('click', handleSaveSettings);
+        elements.dateInput.addEventListener('change', e => updateAutoShiftDisplay(setDateAndDisplay(elements.dateInput, elements.jalaliDateDisplay, e.target.value)));
+        elements.cycleStartDateInput.addEventListener('change', e => setDateAndDisplay(elements.cycleStartDateInput, elements.jalaliCycleDateDisplay, e.target.value));
+        elements.overtimeForm.addEventListener('submit', handleFormSubmit);
+        elements.deleteAllBtn.addEventListener('click', handleDeleteAll);
+        elements.overtimeRecords.addEventListener('click', handleDeleteSingle);
+        elements.modalConfirmBtn.addEventListener('click', () => state.confirmCallback?.());
         elements.modalCancelBtn.addEventListener('click', () => hideModal(elements.confirmModal));
-        
         elements.importBtn.addEventListener('click', () => elements.importFile.click());
         elements.importFile.addEventListener('change', importFromExcel);
         elements.exportBtn.addEventListener('click', exportToExcel);
-    };
-    
-    // --- Excel Import/Export ---
-    const exportToExcel = () => {
-        if(state.overtimeData.length === 0) return showError("داده ای برای خروجی نیست");
-        const data = state.overtimeData.map(r => ({
-            'تاریخ': r.date,
-            'نوع شیفت': config.shiftTypes[r.shiftType] || r.shiftType,
-            'جانشین': r.successor || '',
-            'ساعت شروع': r.startTime,
-            'ساعت پایان': r.endTime,
-            'توضیحات': r.description || '',
-            'غیر روتین': r.isNonRoutine ? 'بله' : 'خیر'
-        }));
-        const ws = XLSX.utils.json_to_sheet(data);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Overtime");
-        XLSX.writeFile(wb, "OvertimeRecords.xlsx");
-    };
 
-    const importFromExcel = (event) => {
-        const file = event.target.files[0];
-        if(!file) return;
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            try {
-                const data = new Uint8Array(e.target.result);
-                const workbook = XLSX.read(data, {type: 'array'});
-                const ws = workbook.Sheets[workbook.SheetNames[0]];
-                const jsonData = XLSX.utils.sheet_to_json(ws);
-                if (jsonData.length === 0) return showError("فایل اکسل خالی یا نامعتبر است.");
+        if (!state.userSettings) openSettingsModal();
+        else initializeMainApp();
 
-                const currentDataMap = state.overtimeData.reduce((map, item) => {
-                    map[item.date] = item;
-                    return map;
-                }, {});
-
-                let importedCount = 0;
-                jsonData.forEach(row => {
-                    let dateStr = row['تاریخ'];
-                    const date = String(dateStr || '').trim();
-
-                    if(moment(date, 'jYYYY/jMM/jDD', true).isValid()) {
-                        const shiftTypePersian = row['نوع شیفت'];
-                        currentDataMap[date] = {
-                            date,
-                            shiftType: shiftTypeMapReverse[shiftTypePersian] || 'change_shift',
-                            successor: String(row['جانشین'] || '').trim(),
-                            startTime: String(row['ساعت شروع'] || '1').trim(),
-                            endTime: String(row['ساعت پایان'] || '1').trim(),
-                            description: String(row['توضیحات'] || '').trim(),
-                            isNonRoutine: (String(row['غیر روتین']).toLowerCase() === 'بله')
-                        };
-                        importedCount++;
-                    }
-                });
-                
-                if (importedCount > 0) {
-                    state.overtimeData = Object.values(currentDataMap);
-                    saveData();
-                    renderRecords();
-                } else {
-                    showError("هیچ رکورد معتبری در فایل اکسل یافت نشد. مطمئن شوید فرمت تاریخ jYYYY/jMM/DD است.");
-                }
-
-            } catch (err) {
-                console.error("Import Error: ", err);
-                showError("خطا در پردازش فایل اکسل.");
-            } finally {
-                elements.importFile.value = '';
-            }
-        };
-        reader.readAsArrayBuffer(file);
-    };
-
-    // --- INITIALIZATION ---
-    const init = () => {
-        try {
-            populateDropdowns();
-            addEventListeners();
-            renderRecords();
-
-            if (!state.userSettings) {
-                openSettingsModal();
-            } else {
-                initializeMainApp();
-            }
-        } catch(e) {
-            console.error("Initialization failed:", e);
-            document.body.innerHTML = '<div class="text-center p-8 text-red-600">یک خطای غیرمنتظره رخ داد. لطفاً حافظه کش مرورگر را پاک کرده و دوباره امتحان کنید.</div>';
-        }
-    };
-
-    init();
+    } catch(e) {
+        console.error("Critical Initialization Error:", e);
+        document.body.innerHTML = `<div class="text-center p-8 text-red-600">یک خطای غیرمنتظره رخ داد. لطفاً حافظه کش مرورگر را پاک کرده و دوباره امتحان کنید.</div>`;
+    }
 });
 </script>
 </body>
