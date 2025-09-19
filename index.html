@@ -29,13 +29,6 @@
         /* DatepickerX adjustments */
         .datepicker-x-container { z-index: 100 !important; font-family: 'Vazirmatn', sans-serif; }
     </style>
-
-    <!-- External Libraries - Moved to HEAD for proper loading -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/moment.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment-timezone/0.5.34/moment-timezone-with-data.min.js"></script>
-    <script src="https://unpkg.com/jalali-moment/dist/jalali-moment.browser.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <script src="https://unpkg.com/datepicker-x@3.1.2/dist/js/datepicker-x.js"></script>
 </head>
 <body class="bg-gray-100 text-gray-800">
 
@@ -129,7 +122,7 @@
         <footer class="text-center mt-12 text-gray-500 text-sm">
             <button id="change-settings-btn" class="text-blue-600 hover:underline mb-4">تغییر تنظیمات شیفت</button>
             <p>طراحی و توسعه جواد ابراهیمی توسط هوش مصنوعی Gemini</p>
-            <p class="mt-1">نسخه 4.0.2 (اصلاح بارگذاری)</p>
+            <p class="mt-1">نسخه 4.0.0 (پایداری نهایی با تقویم جدید)</p>
         </footer>
     </div>
 
@@ -188,375 +181,381 @@
         </div>
     </div>
 
+    <!-- External Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/moment.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment-timezone/0.5.34/moment-timezone-with-data.min.js"></script>
+    <script src="https://unpkg.com/jalali-moment/dist/jalali-moment.browser.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://unpkg.com/datepicker-x@3.1.2/dist/js/datepicker-x.js"></script>
+
     <!-- Main Application Script -->
     <script>
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js').catch(err => console.error('SW registration failed:', err));
-            });
-        }
-
         document.addEventListener('DOMContentLoaded', () => {
-        try {
-            // --- Timezone and Date Helper ---
-            const getTehranMoment = () => moment.tz("Asia/Tehran");
+             if ('serviceWorker' in navigator) {
+                window.addEventListener('load', () => {
+                     navigator.serviceWorker.register('./sw.js').catch(err => console.error('SW registration failed:', err));
+                });
+            }
 
-            // --- Element & State Initialization ---
-            const $ = id => document.getElementById(id);
-            const appView = $('app-view');
-            const settingsView = $('settings-view');
-            const confirmModal = $('confirm-modal');
-            let overtimeData = JSON.parse(localStorage.getItem('overtime_data_v4')) || [];
-            let userSettings = JSON.parse(localStorage.getItem('overtime_settings_v4')) || null;
-            let confirmCallback = null;
-            let mainDatePicker, refDatePicker;
-            const shiftTypeMap = { 'morning': 'شیفت صبح', 'evening': 'شیفت عصر', 'night': 'شیفت شب', 'rest': 'استراحت', 'holiday': 'روز تعطیل', 'change_shift': 'چنج شیفت' };
+            try {
+                // --- Timezone and Date Helper ---
+                const getTehranMoment = () => moment.tz("Asia/Tehran");
 
-            const shiftPatterns = {
-                four_shift: { cycleLength: 12, types: [{t: 'evening', d: 3}, {t: 'morning', d: 3}, {t: 'night', d: 3}, {t: 'rest', d: 3}] },
-                five_shift: { cycleLength: 10, types: [{t: 'evening', d: 2}, {t: 'morning', d: 2}, {t: 'night', d: 2}, {t: 'rest', d: 4}] }
-            };
+                // --- Element & State Initialization ---
+                const $ = id => document.getElementById(id);
+                const appView = $('app-view');
+                const settingsView = $('settings-view');
+                const confirmModal = $('confirm-modal');
+                let overtimeData = JSON.parse(localStorage.getItem('overtime_data_v4')) || [];
+                let userSettings = JSON.parse(localStorage.getItem('overtime_settings_v4')) || null;
+                let confirmCallback = null;
+                let mainDatePicker, refDatePicker;
+                const shiftTypeMap = { 'morning': 'شیفت صبح', 'evening': 'شیفت عصر', 'night': 'شیفت شب', 'rest': 'استراحت', 'holiday': 'روز تعطیل', 'change_shift': 'چنج شیفت' };
 
-            // --- Shift Calculation Logic ---
-            const calculateShiftForDate = (targetDateStr) => {
-                if (!userSettings || !userSettings.shiftPattern) return null;
-                
-                const pattern = userSettings.shiftPattern;
-                const targetDate = moment.tz(targetDateStr, 'jYYYY/jMM/DD', 'Asia/Tehran').startOf('day');
+                const shiftPatterns = {
+                    four_shift: { cycleLength: 12, types: [{t: 'evening', d: 3}, {t: 'morning', d: 3}, {t: 'night', d: 3}, {t: 'rest', d: 3}] },
+                    five_shift: { cycleLength: 10, types: [{t: 'evening', d: 2}, {t: 'morning', d: 2}, {t: 'night', d: 2}, {t: 'rest', d: 4}] }
+                };
 
-                if (pattern === 'day_worker' || pattern === 'two_shift') {
-                    const jDayOfWeek = targetDate.jDay(); // Saturday: 0, ..., Friday: 6
-                    const isWeekend = (jDayOfWeek === 5 || jDayOfWeek === 6);
-                    if (isWeekend) return { type: 'rest', label: 'آخر هفته' };
-                    if (pattern === 'day_worker') return { type: 'morning', label: 'روزکار' };
+                // --- Shift Calculation Logic ---
+                const calculateShiftForDate = (targetDateStr) => {
+                    if (!userSettings || !userSettings.shiftPattern) return null;
                     
-                    if(!userSettings.referenceDate) return null;
-                    const refDate = moment.tz(userSettings.referenceDate, 'jYYYY/jMM/DD', 'Asia/Tehran').startOf('day');
-                    const weekDiff = targetDate.diff(refDate, 'weeks');
-                    const refIsMorning = userSettings.referenceShiftType === 'morning';
-                    return (weekDiff % 2 === 0) ? 
-                           (refIsMorning ? { type: 'morning', label: 'هفته صبح' } : { type: 'evening', label: 'هفته عصر' }) :
-                           (refIsMorning ? { type: 'evening', label: 'هفته عصر' } : { type: 'morning', label: 'هفته صبح' });
-                }
-                
-                if (!userSettings.referenceDate || !shiftPatterns[pattern]) return null;
-                
-                const refDate = moment.tz(userSettings.referenceDate, 'jYYYY/jMM/DD', 'Asia/Tehran').startOf('day');
-                const dayDiff = targetDate.diff(refDate, 'days');
-                
-                const patternData = shiftPatterns[pattern];
-                let refDayIndex = 0;
-                let daysAccumulator = 0;
-                for(const shift of patternData.types) {
-                    if(shift.t === userSettings.referenceShiftType) {
-                        refDayIndex = daysAccumulator + (userSettings.referenceShiftDay - 1);
-                        break;
-                    }
-                    daysAccumulator += shift.d;
-                }
+                    const pattern = userSettings.shiftPattern;
+                    const targetDate = moment.tz(targetDateStr, 'jYYYY/jMM/DD', 'Asia/Tehran').startOf('day');
 
-                const targetDayIndex = (refDayIndex + dayDiff % patternData.cycleLength + patternData.cycleLength) % patternData.cycleLength;
-                
-                daysAccumulator = 0;
-                for(const shift of patternData.types) {
-                    if (targetDayIndex < daysAccumulator + shift.d) {
-                        const dayInShift = targetDayIndex - daysAccumulator + 1;
-                        const labelMap = {'evening': 'عصر', 'morning': 'صبح', 'night': 'شب', 'rest': 'استراحت'};
-                        return { type: shift.t, label: `روز ${dayInShift} از شیفت ${labelMap[shift.t]}` };
-                    }
-                    daysAccumulator += shift.d;
-                }
-                
-                return null;
-            };
-
-            // --- Core Functions ---
-            const saveData = () => localStorage.setItem('overtime_data_v4', JSON.stringify(overtimeData));
-            const saveSettings = () => localStorage.setItem('overtime_settings_v4', JSON.stringify(userSettings));
-            const calculateDuration = (s, e) => (parseInt(e) > parseInt(s)) ? (e - s) : (24 - s + parseInt(e));
-            const showError = (msg) => { $('error-message').textContent = msg; $('error-message').classList.remove('hidden'); setTimeout(() => $('error-message').classList.add('hidden'), 5000); };
-            
-            const showConfirmModal = (title, body, confirmText, onConfirm, confirmClass = 'bg-red-600 hover:bg-red-700') => {
-                $('modal-title').textContent = title;
-                $('modal-body').textContent = body;
-                const confirmBtn = $('modal-confirm-btn');
-                confirmBtn.textContent = confirmText;
-                confirmBtn.className = `w-full sm:w-auto px-4 py-2 text-white rounded-lg ${confirmClass}`;
-                confirmCallback = onConfirm;
-                confirmModal.classList.remove('hidden');
-                setTimeout(() => confirmModal.classList.remove('opacity-0'), 10);
-            };
-            const hideConfirmModal = () => {
-                confirmModal.classList.add('opacity-0');
-                setTimeout(() => { confirmModal.classList.add('hidden'); confirmCallback = null; }, 300);
-            };
-            
-            // --- Excel Functions ---
-            const exportToExcel = () => {
-                if (overtimeData.length === 0) {
-                    return showError("هیچ داده‌ای برای خروجی گرفتن وجود ندارد.");
-                }
-                const dataToExport = overtimeData.map(rec => ({
-                    'تاریخ': rec.date, 'نوع شیفت': shiftTypeMap[rec.shiftType] || '', 'جانشین': rec.successor || '',
-                    'ساعت شروع': rec.startTime, 'ساعت پایان': rec.endTime, 'توضیحات': rec.description || ''
-                }));
-                const worksheet = XLSX.utils.json_to_sheet(dataToExport);
-                const workbook = XLSX.utils.book_new();
-                XLSX.utils.book_append_sheet(workbook, worksheet, "Sabegh-e Ezafekari");
-                XLSX.writeFile(workbook, "Ezafekari.xlsx");
-            };
-
-            const importFromExcel = (event) => {
-                const file = event.target.files[0];
-                if (!file) return;
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    try {
-                        const data = new Uint8Array(e.target.result);
-                        const workbook = XLSX.read(data, { type: 'array' });
-                        const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-                        const importedJson = XLSX.utils.sheet_to_json(worksheet);
-
-                        if(importedJson.length === 0) return showError("فایل اکسل خالی است.");
+                    if (pattern === 'day_worker' || pattern === 'two_shift') {
+                        const jDayOfWeek = targetDate.jDay(); // Saturday: 0, ..., Friday: 6
+                        const isWeekend = (jDayOfWeek === 5 || jDayOfWeek === 6);
+                        if (isWeekend) return { type: 'rest', label: 'آخر هفته' };
+                        if (pattern === 'day_worker') return { type: 'morning', label: 'روزکار' };
                         
-                        const shiftTypeMapReverse = Object.fromEntries(Object.entries(shiftTypeMap).map(([k, v]) => [v, k]));
-                        const currentDataMap = overtimeData.reduce((map, item) => (map[item.date] = item, map), {});
-                        let importedCount = 0;
-
-                        importedJson.forEach(row => {
-                            const dateStr = String(row['تاریخ'] || '').trim();
-                            if(moment(dateStr, 'jYYYY/jMM/DD', true).isValid()) {
-                                currentDataMap[dateStr] = {
-                                    date: dateStr, shiftType: shiftTypeMapReverse[row['نوع شیفت']] || 'holiday',
-                                    successor: String(row['جانشین'] || '').trim(), startTime: String(row['ساعت شروع'] || '1').trim(),
-                                    endTime: String(row['ساعت پایان'] || '1').trim(), description: String(row['توضیحات'] || '').trim(),
-                                };
-                                importedCount++;
-                            }
-                        });
-
-                        if(importedCount > 0) {
-                           overtimeData = Object.values(currentDataMap);
-                           saveData();
-                           renderRecords();
-                           showConfirmModal('موفق', `${importedCount} رکورد وارد شد.`, 'باشه', hideConfirmModal, 'bg-blue-600');
-                        } else {
-                           showError("هیچ رکورد معتبری یافت نشد.");
+                        if(!userSettings.referenceDate) return null;
+                        const refDate = moment.tz(userSettings.referenceDate, 'jYYYY/jMM/DD', 'Asia/Tehran').startOf('day');
+                        const weekDiff = targetDate.diff(refDate, 'weeks');
+                        const refIsMorning = userSettings.referenceShiftType === 'morning';
+                        return (weekDiff % 2 === 0) ? 
+                               (refIsMorning ? { type: 'morning', label: 'هفته صبح' } : { type: 'evening', label: 'هفته عصر' }) :
+                               (refIsMorning ? { type: 'evening', label: 'هفته عصر' } : { type: 'morning', label: 'هفته صبح' });
+                    }
+                    
+                    if (!userSettings.referenceDate || !shiftPatterns[pattern]) return null;
+                    
+                    const refDate = moment.tz(userSettings.referenceDate, 'jYYYY/jMM/DD', 'Asia/Tehran').startOf('day');
+                    const dayDiff = targetDate.diff(refDate, 'days');
+                    
+                    const patternData = shiftPatterns[pattern];
+                    let refDayIndex = 0;
+                    let daysAccumulator = 0;
+                    for(const shift of patternData.types) {
+                        if(shift.t === userSettings.referenceShiftType) {
+                            refDayIndex = daysAccumulator + (userSettings.referenceShiftDay - 1);
+                            break;
                         }
-                    } catch (err) {
-                        showError("خطا در پردازش فایل اکسل.");
-                        console.error(err);
-                    } finally {
-                        $('import-file').value = '';
+                        daysAccumulator += shift.d;
                     }
+
+                    const targetDayIndex = (refDayIndex + dayDiff % patternData.cycleLength + patternData.cycleLength) % patternData.cycleLength;
+                    
+                    daysAccumulator = 0;
+                    for(const shift of patternData.types) {
+                        if (targetDayIndex < daysAccumulator + shift.d) {
+                            const dayInShift = targetDayIndex - daysAccumulator + 1;
+                            const labelMap = {'evening': 'عصر', 'morning': 'صبح', 'night': 'شب', 'rest': 'استراحت'};
+                            return { type: shift.t, label: `روز ${dayInShift} از شیفت ${labelMap[shift.t]}` };
+                        }
+                        daysAccumulator += shift.d;
+                    }
+                    
+                    return null;
                 };
-                reader.readAsArrayBuffer(file);
-            };
 
-            // --- UI & Render Functions ---
-            const renderRecords = () => {
-                const recordsBody = $('overtime-records');
-                recordsBody.innerHTML = '';
-                $('no-records').style.display = overtimeData.length === 0 ? 'block' : 'none';
+                // --- Core Functions ---
+                const saveData = () => localStorage.setItem('overtime_data_v4', JSON.stringify(overtimeData));
+                const saveSettings = () => localStorage.setItem('overtime_settings_v4', JSON.stringify(userSettings));
+                const calculateDuration = (s, e) => (parseInt(e) > parseInt(s)) ? (e - s) : (24 - s + parseInt(e));
+                const showError = (msg) => { $('error-message').textContent = msg; $('error-message').classList.remove('hidden'); setTimeout(() => $('error-message').classList.add('hidden'), 5000); };
                 
-                const sortedData = [...overtimeData].sort((a, b) => moment(b.date, 'jYYYY/jMM/DD').diff(moment(a.date, 'jYYYY/jMM/DD')));
-                sortedData.forEach(rec => {
-                    const tr = document.createElement('tr');
-                    tr.innerHTML = `
-                        <td class="p-4 text-sm">${rec.date}</td>
-                        <td class="p-4 text-sm">${shiftTypeMap[rec.shiftType] || ''}</td>
-                        <td class="p-4 text-sm hidden md:table-cell">${rec.successor || '-'}</td>
-                        <td class="p-4 text-sm">${rec.startTime}:00</td>
-                        <td class="p-4 text-sm">${rec.endTime}:00</td>
-                        <td class="p-4 text-sm font-medium">${calculateDuration(rec.startTime, rec.endTime)} ساعت</td>
-                        <td class="p-4 text-sm"><button data-date="${rec.date}" class="delete-btn text-red-500 hover:underline">حذف</button></td>
-                    `;
-                    recordsBody.appendChild(tr);
-                });
-                updateTotalHours();
-            };
-
-            const updateTotalHours = () => {
-                const totalHours = overtimeData.reduce((t, r) => t + calculateDuration(r.startTime, r.endTime), 0);
+                const showConfirmModal = (title, body, confirmText, onConfirm, confirmClass = 'bg-red-600 hover:bg-red-700') => {
+                    $('modal-title').textContent = title;
+                    $('modal-body').textContent = body;
+                    const confirmBtn = $('modal-confirm-btn');
+                    confirmBtn.textContent = confirmText;
+                    confirmBtn.className = `w-full sm:w-auto px-4 py-2 text-white rounded-lg ${confirmClass}`;
+                    confirmCallback = onConfirm;
+                    confirmModal.classList.remove('hidden');
+                    setTimeout(() => confirmModal.classList.remove('opacity-0'), 10);
+                };
+                const hideConfirmModal = () => {
+                    confirmModal.classList.add('opacity-0');
+                    setTimeout(() => { confirmModal.classList.add('hidden'); confirmCallback = null; }, 300);
+                };
                 
-                let bonusHours = 0;
-                if (userSettings && (userSettings.shiftPattern === 'four_shift' || userSettings.shiftPattern === 'five_shift')) {
-                    const workingDays = overtimeData.filter(r => ['morning', 'evening', 'night'].includes(r.shiftType)).length;
-                    bonusHours = workingDays * 5;
-                }
+                // --- Excel Functions ---
+                const exportToExcel = () => {
+                    if (overtimeData.length === 0) {
+                        return showError("هیچ داده‌ای برای خروجی گرفتن وجود ندارد.");
+                    }
+                    const dataToExport = overtimeData.map(rec => ({
+                        'تاریخ': rec.date, 'نوع شیفت': shiftTypeMap[rec.shiftType] || '', 'جانشین': rec.successor || '',
+                        'ساعت شروع': rec.startTime, 'ساعت پایان': rec.endTime, 'توضیحات': rec.description || ''
+                    }));
+                    const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+                    const workbook = XLSX.utils.book_new();
+                    XLSX.utils.book_append_sheet(workbook, worksheet, "Sabegh-e Ezafekari");
+                    XLSX.writeFile(workbook, "Ezafekari.xlsx");
+                };
 
-                $('total-hours-display').textContent = `مجموع اضافه کاری: ${totalHours} ساعت`;
-                $('overtime-bonus-display').textContent = `اورتایم شیفت: ${bonusHours} ساعت`;
-                $('grand-total-display').textContent = `جمع کل: ${totalHours + bonusHours} ساعت`;
-            };
-            
-            const updateShiftForDate = (dateStr) => {
-                if (!dateStr) {
-                    $('auto-shift-display').textContent = '';
-                    return;
-                }
-                 const autoShift = calculateShiftForDate(dateStr);
-                if (autoShift) {
-                    $('auto-shift-display').textContent = autoShift.label;
-                    $('shift-type').value = autoShift.type;
-                } else {
-                    $('auto-shift-display').textContent = '';
-                }
-            };
+                const importFromExcel = (event) => {
+                    const file = event.target.files[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        try {
+                            const data = new Uint8Array(e.target.result);
+                            const workbook = XLSX.read(data, { type: 'array' });
+                            const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+                            const importedJson = XLSX.utils.sheet_to_json(worksheet);
 
-            const updateSettingsUI = () => {
-                const pattern = $('shift-pattern').value;
-                const calibrationWrapper = $('calibration-wrapper');
-                const refShiftTypeSelect = $('reference-shift-type');
-                const refShiftDayWrapper = $('reference-shift-day').parentElement;
-                const refDateHelp = $('reference-date-help');
+                            if(importedJson.length === 0) return showError("فایل اکسل خالی است.");
+                            
+                            const shiftTypeMapReverse = Object.fromEntries(Object.entries(shiftTypeMap).map(([k, v]) => [v, k]));
+                            const currentDataMap = overtimeData.reduce((map, item) => (map[item.date] = item, map), {});
+                            let importedCount = 0;
+
+                            importedJson.forEach(row => {
+                                const dateStr = String(row['تاریخ'] || '').trim();
+                                if(moment(dateStr, 'jYYYY/jMM/DD', true).isValid()) {
+                                    currentDataMap[dateStr] = {
+                                        date: dateStr, shiftType: shiftTypeMapReverse[row['نوع شیفت']] || 'holiday',
+                                        successor: String(row['جانشین'] || '').trim(), startTime: String(row['ساعت شروع'] || '1').trim(),
+                                        endTime: String(row['ساعت پایان'] || '1').trim(), description: String(row['توضیحات'] || '').trim(),
+                                    };
+                                    importedCount++;
+                                }
+                            });
+
+                            if(importedCount > 0) {
+                               overtimeData = Object.values(currentDataMap);
+                               saveData();
+                               renderRecords();
+                               showConfirmModal('موفق', `${importedCount} رکورد وارد شد.`, 'باشه', hideConfirmModal, 'bg-blue-600');
+                            } else {
+                               showError("هیچ رکورد معتبری یافت نشد.");
+                            }
+                        } catch (err) {
+                            showError("خطا در پردازش فایل اکسل.");
+                            console.error(err);
+                        } finally {
+                            $('import-file').value = '';
+                        }
+                    };
+                    reader.readAsArrayBuffer(file);
+                };
+
+                // --- UI & Render Functions ---
+                const renderRecords = () => {
+                    const recordsBody = $('overtime-records');
+                    recordsBody.innerHTML = '';
+                    $('no-records').style.display = overtimeData.length === 0 ? 'block' : 'none';
+                    
+                    const sortedData = [...overtimeData].sort((a, b) => moment(b.date, 'jYYYY/jMM/DD').diff(moment(a.date, 'jYYYY/jMM/DD')));
+                    sortedData.forEach(rec => {
+                        const tr = document.createElement('tr');
+                        tr.innerHTML = `
+                            <td class="p-4 text-sm">${rec.date}</td>
+                            <td class="p-4 text-sm">${shiftTypeMap[rec.shiftType] || ''}</td>
+                            <td class="p-4 text-sm hidden md:table-cell">${rec.successor || '-'}</td>
+                            <td class="p-4 text-sm">${rec.startTime}:00</td>
+                            <td class="p-4 text-sm">${rec.endTime}:00</td>
+                            <td class="p-4 text-sm font-medium">${calculateDuration(rec.startTime, rec.endTime)} ساعت</td>
+                            <td class="p-4 text-sm"><button data-date="${rec.date}" class="delete-btn text-red-500 hover:underline">حذف</button></td>
+                        `;
+                        recordsBody.appendChild(tr);
+                    });
+                    updateTotalHours();
+                };
+
+                const updateTotalHours = () => {
+                    const totalHours = overtimeData.reduce((t, r) => t + calculateDuration(r.startTime, r.endTime), 0);
+                    
+                    let bonusHours = 0;
+                    if (userSettings && (userSettings.shiftPattern === 'four_shift' || userSettings.shiftPattern === 'five_shift')) {
+                        const workingDays = overtimeData.filter(r => ['morning', 'evening', 'night'].includes(r.shiftType)).length;
+                        bonusHours = workingDays * 5;
+                    }
+
+                    $('total-hours-display').textContent = `مجموع اضافه کاری: ${totalHours} ساعت`;
+                    $('overtime-bonus-display').textContent = `اورتایم شیفت: ${bonusHours} ساعت`;
+                    $('grand-total-display').textContent = `جمع کل: ${totalHours + bonusHours} ساعت`;
+                };
                 
-                if (pattern === 'day_worker') {
-                    calibrationWrapper.classList.add('hidden');
-                } else {
-                    calibrationWrapper.classList.remove('hidden');
-                    if (pattern === 'two_shift') {
-                        refShiftTypeSelect.innerHTML = '<option value="morning">هفته صبح</option><option value="evening">هفته عصر</option>';
-                        refShiftDayWrapper.classList.add('hidden');
-                        refDateHelp.textContent = 'تاریخ یک روز از هفته‌ای که وضعیت آن را می‌دانید وارد کنید (مثلا شنبه).';
+                const updateShiftForDate = (dateStr) => {
+                    if (!dateStr) {
+                        $('auto-shift-display').textContent = '';
+                        return;
+                    }
+                     const autoShift = calculateShiftForDate(dateStr);
+                    if (autoShift) {
+                        $('auto-shift-display').textContent = autoShift.label;
+                        $('shift-type').value = autoShift.type;
                     } else {
-                        refShiftTypeSelect.innerHTML = '<option value="evening">عصر</option><option value="morning">صبح</option><option value="night">شب</option><option value="rest">استراحت</option>';
-                        refShiftDayWrapper.classList.remove('hidden');
-                        refDateHelp.textContent = 'یک روز دلخواه که وضعیت شیفت آن را به طور دقیق می‌دانید (مثلاً ۲۱ام ماه).';
+                        $('auto-shift-display').textContent = '';
                     }
-                }
-            };
+                };
 
-            // --- App Initialization ---
-            const initializeApp = () => {
-                appView.classList.remove('hidden-view');
-                settingsView.classList.add('hidden-view');
-                
-                const startTimeSelect = $('start-time');
-                const endTimeSelect = $('end-time');
-                if (startTimeSelect.options.length === 0) {
-                    for (let i = 1; i <= 24; i++) {
-                        startTimeSelect.add(new Option(`${i}:00`, i));
-                        endTimeSelect.add(new Option(`${i}:00`, i));
+                const updateSettingsUI = () => {
+                    const pattern = $('shift-pattern').value;
+                    const calibrationWrapper = $('calibration-wrapper');
+                    const refShiftTypeSelect = $('reference-shift-type');
+                    const refShiftDayWrapper = $('reference-shift-day').parentElement;
+                    const refDateHelp = $('reference-date-help');
+                    
+                    if (pattern === 'day_worker') {
+                        calibrationWrapper.classList.add('hidden');
+                    } else {
+                        calibrationWrapper.classList.remove('hidden');
+                        if (pattern === 'two_shift') {
+                            refShiftTypeSelect.innerHTML = '<option value="morning">هفته صبح</option><option value="evening">هفته عصر</option>';
+                            refShiftDayWrapper.classList.add('hidden');
+                            refDateHelp.textContent = 'تاریخ یک روز از هفته‌ای که وضعیت آن را می‌دانید وارد کنید (مثلا شنبه).';
+                        } else {
+                            refShiftTypeSelect.innerHTML = '<option value="evening">عصر</option><option value="morning">صبح</option><option value="night">شب</option><option value="rest">استراحت</option>';
+                            refShiftDayWrapper.classList.remove('hidden');
+                            refDateHelp.textContent = 'یک روز دلخواه که وضعیت شیفت آن را به طور دقیق می‌دانید (مثلاً ۲۱ام ماه).';
+                        }
                     }
-                }
+                };
+
+                // --- App Initialization ---
+                const initializeApp = () => {
+                    appView.classList.remove('hidden-view');
+                    settingsView.classList.add('hidden-view');
+                    
+                    const startTimeSelect = $('start-time');
+                    const endTimeSelect = $('end-time');
+                    if (startTimeSelect.options.length === 0) {
+                        for (let i = 1; i <= 24; i++) {
+                            startTimeSelect.add(new Option(`${i}:00`, i));
+                            endTimeSelect.add(new Option(`${i}:00`, i));
+                        }
+                    }
+                    
+                    mainDatePicker = new DatepickerX($('date-input'), {
+                        calendar: 'jalali',
+                        format: 'yyyy/mm/dd',
+                    });
+
+                    $('today-btn').click(); 
+                    renderRecords();
+                };
                 
-                mainDatePicker = new DatepickerX($('date-input'), {
-                    calendar: 'jalali',
-                    format: 'yyyy/mm/dd',
+                // --- Event Listeners Setup ---
+                $('today-btn').addEventListener('click', () => {
+                    const todayJalali = getTehranMoment().locale('fa').format('YYYY/MM/DD');
+                    if (mainDatePicker) {
+                        mainDatePicker.setValue(todayJalali);
+                    }
+                });
+                
+                $('shift-pattern').addEventListener('change', updateSettingsUI);
+
+                $('settings-form').addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    const pattern = $('shift-pattern').value;
+                    
+                    if (pattern !== 'day_worker' && !$('reference-date').value) {
+                         return alert('لطفاً تاریخ مرجع را انتخاب کنید.');
+                    }
+                    
+                    userSettings = {
+                        shiftPattern: pattern,
+                        referenceDate: $('reference-date').value,
+                        referenceShiftType: $('reference-shift-type').value,
+                        referenceShiftDay: parseInt($('reference-shift-day').value) || 1,
+                    };
+                    saveSettings();
+                    initializeApp();
                 });
 
-                $('today-btn').click(); 
-                renderRecords();
-            };
-            
-            // --- Event Listeners Setup ---
-            $('today-btn').addEventListener('click', () => {
-                const todayJalali = getTehranMoment().locale('fa').format('YYYY/MM/DD');
-                if (mainDatePicker) {
-                    mainDatePicker.setValue(todayJalali);
-                }
-            });
-            
-            $('shift-pattern').addEventListener('change', updateSettingsUI);
+                $('overtime-form').addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    const date = $('date-input').value;
+                    if (!date) return showError('لطفاً یک تاریخ انتخاب کنید.');
 
-            $('settings-form').addEventListener('submit', (e) => {
-                e.preventDefault();
-                const pattern = $('shift-pattern').value;
-                
-                if (pattern !== 'day_worker' && !$('reference-date').value) {
-                     return alert('لطفاً تاریخ مرجع را انتخاب کنید.');
-                }
-                
-                userSettings = {
-                    shiftPattern: pattern,
-                    referenceDate: $('reference-date').value,
-                    referenceShiftType: $('reference-shift-type').value,
-                    referenceShiftDay: parseInt($('reference-shift-day').value) || 1,
-                };
-                saveSettings();
-                initializeApp();
-            });
-
-            $('overtime-form').addEventListener('submit', (e) => {
-                e.preventDefault();
-                const date = $('date-input').value;
-                if (!date) return showError('لطفاً یک تاریخ انتخاب کنید.');
-
-                const record = { date, startTime: $('start-time').value, endTime: $('end-time').value, shiftType: $('shift-type').value, successor: $('successor-input').value.trim(), description: $('description').value.trim() };
-                const index = overtimeData.findIndex(r => r.date === date);
-                if (index > -1) overtimeData[index] = record; else overtimeData.push(record);
-                
-                saveData();
-                renderRecords();
-                $('overtime-form').reset();
-                
-                if (mainDatePicker) mainDatePicker.setValue('');
-                updateShiftForDate(null);
-            });
-            
-            $('delete-all-btn').addEventListener('click', () => {
-                if (overtimeData.length === 0) return;
-                showConfirmModal('حذف همه', 'آیا از حذف تمام سوابق مطمئن هستید؟', 'بله، حذف کن', () => {
-                    overtimeData = [];
+                    const record = { date, startTime: $('start-time').value, endTime: $('end-time').value, shiftType: $('shift-type').value, successor: $('successor-input').value.trim(), description: $('description').value.trim() };
+                    const index = overtimeData.findIndex(r => r.date === date);
+                    if (index > -1) overtimeData[index] = record; else overtimeData.push(record);
+                    
                     saveData();
                     renderRecords();
-                    hideConfirmModal();
+                    $('overtime-form').reset();
+                    
+                    if (mainDatePicker) mainDatePicker.setValue('');
+                    updateShiftForDate(null);
                 });
-            });
-            
-            $('import-btn').addEventListener('click', () => $('import-file').click());
-            $('import-file').addEventListener('change', importFromExcel);
-            
-            $('overtime-records').addEventListener('click', (e) => {
-                if (e.target.classList.contains('delete-btn')) {
-                    const date = e.target.dataset.date;
-                    showConfirmModal('حذف رکورد', `آیا رکورد تاریخ ${date} حذف شود؟`, 'بله، حذف کن', () => {
-                        overtimeData = overtimeData.filter(r => r.date !== date);
+                
+                $('delete-all-btn').addEventListener('click', () => {
+                    if (overtimeData.length === 0) return;
+                    showConfirmModal('حذف همه', 'آیا از حذف تمام سوابق مطمئن هستید؟', 'بله، حذف کن', () => {
+                        overtimeData = [];
                         saveData();
                         renderRecords();
                         hideConfirmModal();
                     });
-                }
-            });
-            
-            $('date-input').addEventListener('change', (e) => updateShiftForDate(e.target.value));
-
-            $('change-settings-btn').addEventListener('click', () => {
-                settingsView.classList.remove('hidden-view');
-                appView.classList.add('hidden-view');
-                if(!refDatePicker) {
-                     refDatePicker = new DatepickerX($('reference-date'), {
-                        calendar: 'jalali',
-                        format: 'yyyy/mm/dd',
-                     });
-                }
-                updateSettingsUI();
-            });
-            
-             $('modal-cancel-btn').addEventListener('click', () => hideConfirmModal());
-             $('modal-confirm-btn').addEventListener('click', () => { if(confirmCallback) confirmCallback(); });
-
-
-            // --- Initial Load Logic ---
-            if (userSettings) {
-                initializeApp();
-            } else {
-                settingsView.classList.remove('hidden-view');
-                refDatePicker = new DatepickerX($('reference-date'), {
-                     calendar: 'jalali',
-                     format: 'yyyy/mm/dd',
                 });
-                updateSettingsUI();
-            }
+                
+                $('import-btn').addEventListener('click', () => $('import-file').click());
+                $('import-file').addEventListener('change', importFromExcel);
+                
+                $('overtime-records').addEventListener('click', (e) => {
+                    if (e.target.classList.contains('delete-btn')) {
+                        const date = e.target.dataset.date;
+                        showConfirmModal('حذف رکورد', `آیا رکورد تاریخ ${date} حذف شود؟`, 'بله، حذف کن', () => {
+                            overtimeData = overtimeData.filter(r => r.date !== date);
+                            saveData();
+                            renderRecords();
+                            hideConfirmModal();
+                        });
+                    }
+                });
+                
+                $('date-input').addEventListener('change', (e) => updateShiftForDate(e.target.value));
 
-        } catch (e) {
-            console.error("Critical Application Error:", e);
-            document.body.innerHTML = `<div class="text-center p-8 text-red-600 bg-white">یک خطای غیرمنتظره و جدی رخ داد. لطفاً حافظه کش مرورگر را پاک کرده و دوباره امتحان کنید. اگر مشکل ادامه داشت، با توسعه‌دهنده تماس بگیرید.</div>`;
-        }
+                $('change-settings-btn').addEventListener('click', () => {
+                    settingsView.classList.remove('hidden-view');
+                    appView.classList.add('hidden-view');
+                    if(!refDatePicker) {
+                         refDatePicker = new DatepickerX($('reference-date'), {
+                            calendar: 'jalali',
+                            format: 'yyyy/mm/dd',
+                         });
+                    }
+                    updateSettingsUI();
+                });
+                
+                 $('modal-cancel-btn').addEventListener('click', () => hideConfirmModal());
+                 $('modal-confirm-btn').addEventListener('click', () => { if(confirmCallback) confirmCallback(); });
+
+
+                // --- Initial Load Logic ---
+                if (userSettings) {
+                    initializeApp();
+                } else {
+                    settingsView.classList.remove('hidden-view');
+                    refDatePicker = new DatepickerX($('reference-date'), {
+                         calendar: 'jalali',
+                         format: 'yyyy/mm/dd',
+                    });
+                    updateSettingsUI();
+                }
+
+            } catch (e) {
+                console.error("Critical Application Error:", e);
+                document.body.innerHTML = `<div class="text-center p-8 text-red-600 bg-white">یک خطای غیرمنتظره و جدی رخ داد. لطفاً حافظه کش مرورگر را پاک کرده و دوباره امتحان کنید. اگر مشکل ادامه داشت، با توسعه‌دهنده تماس بگیرید.</div>`;
+            }
         });
     </script>
 </body>
 </html>
-
 
