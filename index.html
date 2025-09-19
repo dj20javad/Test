@@ -29,6 +29,13 @@
         /* DatepickerX adjustments */
         .datepicker-x-container { z-index: 100 !important; font-family: 'Vazirmatn', sans-serif; }
     </style>
+
+    <!-- External Libraries - Moved to HEAD for proper loading -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/moment.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment-timezone/0.5.34/moment-timezone-with-data.min.js"></script>
+    <script src="https://unpkg.com/jalali-moment/dist/jalali-moment.browser.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://unpkg.com/datepicker-x@3.1.2/dist/js/datepicker-x.js"></script>
 </head>
 <body class="bg-gray-100 text-gray-800">
 
@@ -122,7 +129,7 @@
         <footer class="text-center mt-12 text-gray-500 text-sm">
             <button id="change-settings-btn" class="text-blue-600 hover:underline mb-4">تغییر تنظیمات شیفت</button>
             <p>طراحی و توسعه جواد ابراهیمی توسط هوش مصنوعی Gemini</p>
-            <p class="mt-1">نسخه 4.0.1 (اصلاح نهایی)</p>
+            <p class="mt-1">نسخه 4.0.2 (اصلاح بارگذاری)</p>
         </footer>
     </div>
 
@@ -181,20 +188,11 @@
         </div>
     </div>
 
-    <!-- External Libraries -->
-    <!-- Moment.js and Moment Timezone for accurate date handling -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/moment.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment-timezone/0.5.34/moment-timezone-with-data.min.js"></script>
-    <script src="https://unpkg.com/jalali-moment/dist/jalali-moment.browser.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <!-- New Datepicker -->
-    <script src="https://unpkg.com/datepicker-x@3.1.2/dist/js/datepicker-x.js"></script>
-    
     <!-- Main Application Script -->
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('sw.js').catch(err => console.error('SW registration failed:', err));
+                navigator.serviceWorker.register('./sw.js').catch(err => console.error('SW registration failed:', err));
             });
         }
 
@@ -291,6 +289,68 @@
             const hideConfirmModal = () => {
                 confirmModal.classList.add('opacity-0');
                 setTimeout(() => { confirmModal.classList.add('hidden'); confirmCallback = null; }, 300);
+            };
+            
+            // --- Excel Functions ---
+            const exportToExcel = () => {
+                if (overtimeData.length === 0) {
+                    return showError("هیچ داده‌ای برای خروجی گرفتن وجود ندارد.");
+                }
+                const dataToExport = overtimeData.map(rec => ({
+                    'تاریخ': rec.date, 'نوع شیفت': shiftTypeMap[rec.shiftType] || '', 'جانشین': rec.successor || '',
+                    'ساعت شروع': rec.startTime, 'ساعت پایان': rec.endTime, 'توضیحات': rec.description || ''
+                }));
+                const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+                const workbook = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(workbook, worksheet, "Sabegh-e Ezafekari");
+                XLSX.writeFile(workbook, "Ezafekari.xlsx");
+            };
+
+            const importFromExcel = (event) => {
+                const file = event.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const data = new Uint8Array(e.target.result);
+                        const workbook = XLSX.read(data, { type: 'array' });
+                        const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+                        const importedJson = XLSX.utils.sheet_to_json(worksheet);
+
+                        if(importedJson.length === 0) return showError("فایل اکسل خالی است.");
+                        
+                        const shiftTypeMapReverse = Object.fromEntries(Object.entries(shiftTypeMap).map(([k, v]) => [v, k]));
+                        const currentDataMap = overtimeData.reduce((map, item) => (map[item.date] = item, map), {});
+                        let importedCount = 0;
+
+                        importedJson.forEach(row => {
+                            const dateStr = String(row['تاریخ'] || '').trim();
+                            if(moment(dateStr, 'jYYYY/jMM/DD', true).isValid()) {
+                                currentDataMap[dateStr] = {
+                                    date: dateStr, shiftType: shiftTypeMapReverse[row['نوع شیفت']] || 'holiday',
+                                    successor: String(row['جانشین'] || '').trim(), startTime: String(row['ساعت شروع'] || '1').trim(),
+                                    endTime: String(row['ساعت پایان'] || '1').trim(), description: String(row['توضیحات'] || '').trim(),
+                                };
+                                importedCount++;
+                            }
+                        });
+
+                        if(importedCount > 0) {
+                           overtimeData = Object.values(currentDataMap);
+                           saveData();
+                           renderRecords();
+                           showConfirmModal('موفق', `${importedCount} رکورد وارد شد.`, 'باشه', hideConfirmModal, 'bg-blue-600');
+                        } else {
+                           showError("هیچ رکورد معتبری یافت نشد.");
+                        }
+                    } catch (err) {
+                        showError("خطا در پردازش فایل اکسل.");
+                        console.error(err);
+                    } finally {
+                        $('import-file').value = '';
+                    }
+                };
+                reader.readAsArrayBuffer(file);
             };
 
             // --- UI & Render Functions ---
@@ -395,8 +455,6 @@
                 const todayJalali = getTehranMoment().locale('fa').format('YYYY/MM/DD');
                 if (mainDatePicker) {
                     mainDatePicker.setValue(todayJalali);
-                    // Manually trigger the update because setValue doesn't fire 'change'
-                    updateShiftForDate(todayJalali);
                 }
             });
             
@@ -448,6 +506,7 @@
             });
             
             $('import-btn').addEventListener('click', () => $('import-file').click());
+            $('import-file').addEventListener('change', importFromExcel);
             
             $('overtime-records').addEventListener('click', (e) => {
                 if (e.target.classList.contains('delete-btn')) {
