@@ -12,7 +12,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;700&display=swap" rel="stylesheet">
     
-    <link href="https://unpkg.com/kamadatepicker/dist/kamadatepicker.min.css" rel="stylesheet" />
+    <!-- Kama Datepicker CSS from CDN -->
+	<link href="https://unpkg.com/kamadatepicker/dist/kamadatepicker.min.css" rel="stylesheet" />
     
     <style>
         body { font-family: 'Vazirmatn', sans-serif; background-color: #f3f4f6; }
@@ -28,7 +29,8 @@
         #bd-main-persian-date-picker-container-reference-date { z-index: 100 !important; }
     </style>
     
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <!-- External Libraries -->
+	<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://unpkg.com/kamadatepicker/dist/kamadatepicker.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/moment.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/moment-timezone/0.5.34/moment-timezone-with-data.min.js"></script>
@@ -37,6 +39,7 @@
 </head>
 <body class="bg-gray-100 text-gray-800">
 
+    <!-- Main Application View -->
     <div id="app-view" class="container mx-auto p-4 md:p-8 max-w-4xl hidden-view">
         <header class="text-center mb-8 flex flex-col items-center">
             <img src="https://en.iranalumina.ir/wp-content/uploads/2017/09/Site-Logo1.png" alt="لوگوی شرکت آلومینای ایران" class="h-[42px] w-[42px] mb-4 object-contain" onerror="this.src='https://placehold.co/42x42/cccccc/ffffff?text=IAC'">
@@ -123,10 +126,11 @@
         <footer class="text-center mt-12 text-gray-500 text-sm">
             <button id="change-settings-btn" class="text-blue-600 hover:underline mb-4">تغییر تنظیمات شیفت</button>
             <p>طراحی و توسعه جواد ابراهیمی توسط هوش مصنوعی Gemini</p>
-            <p class="mt-1">نسخه 12.0.1 (اصلاح نهایی)</p>
+            <p class="mt-1">نسخه 11.0.1 (اصلاح نهایی)</p>
         </footer>
     </div>
 
+    <!-- Settings View -->
     <div id="settings-view" class="fixed inset-0 bg-gray-200 flex items-center justify-center p-4 z-50 hidden-view">
         <div class="bg-white p-6 sm:p-8 rounded-lg shadow-2xl w-full max-w-md">
             <h2 class="text-2xl font-bold text-center text-gray-800 mb-6">تنظیمات شیفت کاری</h2>
@@ -152,7 +156,7 @@
                     <div>
                         <label for="reference-date" class="block mb-2 font-bold text-gray-700">۳. یک تاریخ مرجع انتخاب کنید:</label>
                         <input type="text" id="reference-date" placeholder="برای انتخاب تاریخ کلیک کنید" class="w-full p-3 border border-gray-300 rounded-lg text-center bg-white cursor-pointer">
-                        <p id="reference-date-help" class="text-xs text-gray-500 mt-2">یک روز دلخواه که وضعیت شیft آن را به طور دقیق می‌دانید (مثلاً ۲۱ام ماه).</p>
+                        <p id="reference-date-help" class="text-xs text-gray-500 mt-2">یک روز دلخواه که وضعیت شیفت آن را به طور دقیق می‌دانید (مثلاً ۲۱ام ماه).</p>
                     </div>
                     <div class="grid grid-cols-2 gap-4">
                         <div>
@@ -165,7 +169,7 @@
                             </select>
                         </div>
                         <div>
-                            <label for="reference-shift-day" class="block mb-2 font-medium text-gray-700">چندمین روز؟</label>
+                            <label for="reference-shift-day" class="block mb-2 font-bold text-gray-700">چندمین روز؟</label>
                             <input type="number" id="reference-shift-day" value="1" min="1" max="4" class="w-full p-3 border border-gray-300 rounded-lg text-center">
                         </div>
                     </div>
@@ -176,6 +180,7 @@
         </div>
     </div>
     
+    <!-- Confirmation Modal -->
     <div id="confirm-modal" class="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center p-4 z-[101] hidden opacity-0 modal-backdrop">
         <div class="bg-white rounded-lg shadow-xl w-full max-w-sm p-6">
             <h3 class="text-lg font-bold text-gray-800 mb-4" id="modal-title"></h3>
@@ -187,19 +192,29 @@
         </div>
     </div>
 
+    <!-- Main Application Script -->
     <script>
         document.addEventListener('DOMContentLoaded', () => {
+            // Service Worker Registration removed from here to avoid race conditions.
+            // It will be handled in the window.load event listener.
+
             try {
                 // --- Timezone Helper ---
-                const getTehranMoment = (date, format) => moment.tz(date, format, "Asia/Tehran");
+                const getTehranMoment = (date, format) => {
+                    if (typeof moment.tz !== 'function') {
+                        console.error("Moment Timezone library not loaded correctly.");
+                        return moment(date, format);
+                    }
+                    return moment.tz(date, format, "Asia/Tehran");
+                }
 
                 // --- Element & State Initialization ---
                 const $ = id => document.getElementById(id);
                 const appView = $('app-view');
                 const settingsView = $('settings-view');
                 const confirmModal = $('confirm-modal');
-                let overtimeData = JSON.parse(localStorage.getItem('overtime_data_v12')) || [];
-                let userSettings = JSON.parse(localStorage.getItem('overtime_settings_v12')) || null;
+                let overtimeData = JSON.parse(localStorage.getItem('overtime_data_v11')) || [];
+                let userSettings = JSON.parse(localStorage.getItem('overtime_settings_v11')) || null;
                 let confirmCallback = null;
                 const shiftTypeMap = { 'morning': 'شیفت صبح', 'evening': 'شیفت عصر', 'night': 'شیفت شب', 'rest': 'استراحت', 'holiday': 'روز تعطیل', 'change_shift': 'چنج شیفت' };
 
@@ -262,8 +277,8 @@
                 };
 
                 // --- Core Functions ---
-                const saveData = () => localStorage.setItem('overtime_data_v12', JSON.stringify(overtimeData));
-                const saveSettings = () => localStorage.setItem('overtime_settings_v12', JSON.stringify(userSettings));
+                const saveData = () => localStorage.setItem('overtime_data_v11', JSON.stringify(overtimeData));
+                const saveSettings = () => localStorage.setItem('overtime_settings_v11', JSON.stringify(userSettings));
                 const calculateDuration = (s, e) => (parseFloat(e) > parseFloat(s)) ? (e - s) : (24 - s + parseFloat(e));
                 const showError = (msg) => { $('error-message').textContent = msg; $('error-message').classList.remove('hidden'); setTimeout(() => $('error-message').classList.add('hidden'), 5000); };
                 
@@ -308,7 +323,7 @@
                             const data = new Uint8Array(e.target.result);
                             const workbook = XLSX.read(data, { type: 'array' });
                             const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-                            const importedJson = XLSX.utils.sheet_to_json(worksheet, {raw: false});
+                            const importedJson = XLSX.utils.sheet_to_json(worksheet, {raw: false}); // Read dates as formatted strings
                             if(importedJson.length === 0) return showError("فایل اکسل خالی است.");
                             
                             const shiftTypeMapReverse = Object.fromEntries(Object.entries(shiftTypeMap).map(([k, v]) => [v, k]));
